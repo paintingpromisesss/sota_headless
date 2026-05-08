@@ -1,0 +1,13 @@
+config.json
+.env
+.tools/
+.cache/
+.venv/
+/sota-headless
+/sota-headless.exe
+state/*.json
+runtime/*.json
+rule_sets/*.srs
+*.log
+*:Zone.Identifier
+bin
