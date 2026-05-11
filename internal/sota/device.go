@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -20,32 +21,39 @@ type Device struct {
 	CreatedAt  string `json:"created_at,omitempty"`
 }
 
+var (
+	ErrInvalidDevice = errors.New("device.json is missing x_hwid or x_device_name")
+)
+
 func LoadOrCreateDevice(stateDir, envHWID, envDeviceName string) (Device, error) {
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		return Device{}, err
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		return Device{}, fmt.Errorf("failed to create state directory: %w", err)
 	}
 	path := filepath.Join(stateDir, "device.json")
 	var device Device
-	if data, err := os.ReadFile(path); err == nil {
-		if err := json.Unmarshal(data, &device); err != nil {
-			return Device{}, err
-		}
-	} else if os.IsNotExist(err) {
-		hwid, err := generateHWID()
-		if err != nil {
-			return Device{}, err
+	//nolint:gosec // path forms internally
+	data, err := os.ReadFile(path)
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		hwid, hwidErr := generateHWID()
+		if hwidErr != nil {
+			return Device{}, fmt.Errorf("failed to generate HWID: %w", hwidErr)
 		}
 		device = Device{
 			HWID:       hwid,
 			DeviceName: defaultDeviceName(),
 			CreatedAt:  time.Now().UTC().Format(time.RFC3339),
 		}
-		if err := writeJSONAtomic(path, device); err != nil {
-			return Device{}, err
+		if jsonErr := writeJSONAtomic(path, device); jsonErr != nil {
+			return Device{}, fmt.Errorf("failed to write device.json: %w", jsonErr)
 		}
-	} else {
-		return Device{}, err
+	} else if err != nil {
+		return Device{}, fmt.Errorf("failed to read device.json: %w", err)
 	}
+
+	if err = json.Unmarshal(data, &device); err != nil {
+		return Device{}, fmt.Errorf("failed to unmarshal device.json: %w", err)
+	}
+
 	if strings.TrimSpace(envHWID) != "" {
 		device.HWID = strings.TrimSpace(envHWID)
 	}
@@ -53,7 +61,7 @@ func LoadOrCreateDevice(stateDir, envHWID, envDeviceName string) (Device, error)
 		device.DeviceName = strings.TrimSpace(envDeviceName)
 	}
 	if device.HWID == "" || device.DeviceName == "" {
-		return Device{}, fmt.Errorf("device.json is missing x_hwid or x_device_name")
+		return Device{}, ErrInvalidDevice
 	}
 	return device, nil
 }
@@ -61,9 +69,12 @@ func LoadOrCreateDevice(stateDir, envHWID, envDeviceName string) (Device, error)
 func generateHWID() (string, error) {
 	var random [32]byte
 	if _, err := rand.Read(random[:]); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read random bytes: %w", err)
 	}
-	host, _ := os.Hostname()
+	host, err := os.Hostname()
+	if err != nil {
+		return "", fmt.Errorf("failed to get hostname: %w", err)
+	}
 	seed := strings.Join([]string{
 		"sota-headless",
 		host,
@@ -104,12 +115,15 @@ func HostHasNetwork() bool {
 func writeJSONAtomic(path string, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 	data = append(data, '\n')
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
+		return fmt.Errorf("failed to write temporary JSON file: %w", err)
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("failed to rename temporary JSON file: %w", err)
+	}
+	return nil
 }

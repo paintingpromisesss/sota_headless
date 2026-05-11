@@ -2,6 +2,7 @@ package sota
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -9,14 +10,19 @@ import (
 	"sota-headless/internal/httpclient"
 )
 
+var (
+	ErrResponseNotObject = errors.New("response is not an object")
+	ErrResponseNotArray  = errors.New("response is not an array")
+)
+
 type Client struct {
+	HTTPClient     *httpclient.Client
 	AccessKey      string
-	Device         Device
-	Bases          []string
 	UserAgent      string
 	AcceptLanguage string
 	ActiveBase     string
-	HTTPClient     *httpclient.Client
+	Device         Device
+	Bases          []string
 }
 
 func NewClient(accessKey string, device Device, bases []string, userAgent, acceptLanguage string) *Client {
@@ -36,7 +42,7 @@ func (c *Client) Profile(ctx context.Context) (map[string]any, error) {
 		return nil, err
 	}
 	if out == nil {
-		return nil, fmt.Errorf("profile response is not an object")
+		return nil, fmt.Errorf("%w; endpoint: profile", ErrResponseNotObject)
 	}
 	return out, nil
 }
@@ -47,7 +53,7 @@ func (c *Client) Locations(ctx context.Context) ([]map[string]any, error) {
 		return nil, err
 	}
 	if out == nil {
-		return nil, fmt.Errorf("connection/list response is not an array")
+		return nil, fmt.Errorf("%w; endpoint: connection/list", ErrResponseNotArray)
 	}
 	return out, nil
 }
@@ -58,7 +64,7 @@ func (c *Client) Connect(ctx context.Context, gateID int) (map[string]any, error
 		return nil, err
 	}
 	if out == nil {
-		return nil, fmt.Errorf("connection/connect response is not an object")
+		return nil, fmt.Errorf("%w; endpoint: connection/connect", ErrResponseNotObject)
 	}
 	return out, nil
 }
@@ -97,7 +103,10 @@ func (c *Client) requestJSONBase(ctx context.Context, base, path string, query u
 	if client == nil {
 		client = httpclient.New()
 	}
-	return client.GetJSON(ctx, endpoint, c.Headers(), target)
+	if err := client.GetJSON(ctx, endpoint, c.Headers(), target); err != nil {
+		return fmt.Errorf("request to %s failed: %w", endpoint, err)
+	}
+	return nil
 }
 
 func (c *Client) Headers() map[string]string {

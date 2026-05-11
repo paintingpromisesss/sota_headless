@@ -23,6 +23,7 @@ var (
 	ErrNonHTTPSURL         = errors.New("non-HTTPS URL")
 	ErrUserInfoNotAllowed  = fmt.Errorf("URL with userinfo is not allowed")
 	ErrResponseTooLarge    = fmt.Errorf("response exceeds maximum allowed size")
+	ErrHTTPError           = fmt.Errorf("HTTP error response")
 )
 
 const (
@@ -118,6 +119,7 @@ func (c *Client) DownloadFile(ctx context.Context, endpoint string, headers map[
 	defer resp.Body.Close()
 
 	tmp := dst + ".tmp"
+	//nolint:gosec // path forms internally
 	f, err := os.Create(tmp)
 	if err != nil {
 		return fmt.Errorf("failed to create temp file for %s: %w", dst, err)
@@ -189,7 +191,7 @@ func (c *Client) Do(ctx context.Context, method, endpoint string, headers map[st
 	if len(data) > 500 {
 		data = data[:500]
 	}
-	return nil, fmt.Errorf("HTTP %d from %s: %s", resp.StatusCode, endpoint, string(data))
+	return nil, fmt.Errorf("%w: %d from %s: %s", ErrHTTPError, resp.StatusCode, endpoint, string(data))
 }
 
 func (c *Client) validateURL(endpoint string) error {

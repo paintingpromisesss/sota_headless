@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -19,36 +20,42 @@ import (
 	"sota-headless/internal/sota"
 )
 
-type Controller struct {
-	Config        config.Config
-	Client        *sota.Client
-	Device        sota.Device
-	StateDir      string
-	RuntimeDir    string
-	RuleSetsDir   string
-	RuntimePath   string
-	SingBoxLog    string
-	LastError     string
-	LastSnippet   map[string]any
-	LastRuntime   map[string]any
-	CurrentGateID int
-	StartedAt     string
+var (
+	ErrSingBoxCheckFailed = errors.New("sing-box check failed")
+	ErrSingBox            = errors.New("sing-box error")
+)
 
-	mu      sync.Mutex
-	process *exec.Cmd
-	done    chan error
+type Controller struct {
+	process     *exec.Cmd
+	Client      *sota.Client
+	Config      *config.Config
+	done        chan error
+	LastSnippet map[string]any
+	LastRuntime map[string]any
+	Device      sota.Device
+	StateDir    string
+	RuntimeDir  string
+	RuleSetsDir string
+	RuntimePath string
+	SingBoxLog  string
+	LastError   string
+	StartedAt   string
+
+	mu            sync.Mutex
+	CurrentGateID int
 }
 
 func New(cfg config.Config) (*Controller, error) {
 	stateDir := filepath.Join(cfg.BaseDir, "state")
 	device, err := sota.LoadOrCreateDevice(stateDir, cfg.HWID, cfg.DeviceName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load or create device: %w", err)
 	}
 	client := sota.NewClient(cfg.AccessKey, device, cfg.APIBases, cfg.UserAgent, cfg.AcceptLanguage)
 	runtimeDir := filepath.Join(cfg.BaseDir, "runtime")
+	cfgCopy := cfg
 	return &Controller{
-		Config:      cfg,
+		Config:      &cfgCopy,
 		Client:      client,
 		Device:      device,
 		StateDir:    stateDir,
@@ -60,11 +67,19 @@ func New(cfg config.Config) (*Controller, error) {
 }
 
 func (c *Controller) Profile(ctx context.Context) (map[string]any, error) {
-	return c.Client.Profile(ctx)
+	profile, err := c.Client.Profile(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch profile: %w", err)
+	}
+	return profile, nil
 }
 
 func (c *Controller) Locations(ctx context.Context) ([]map[string]any, error) {
-	return c.Client.Locations(ctx)
+	locations, err := c.Client.Locations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch locations: %w", err)
+	}
+	return locations, nil
 }
 
 func (c *Controller) Render(ctx context.Context, gate any) (string, map[string]any, map[string]any, error) {
@@ -81,7 +96,7 @@ func (c *Controller) Render(ctx context.Context, gate any) (string, map[string]a
 	snippet, err := c.Client.Connect(ctx, gateID)
 	if err != nil {
 		c.LastError = err.Error()
-		return "", nil, nil, err
+		return "", nil, nil, fmt.Errorf("failed to fetch connection snippet: %w", err)
 	}
 	runtime, err := runtimecfg.Build(ctx, snippet, runtimecfg.Options{
 		Mode:          c.Config.Mode,
@@ -93,11 +108,11 @@ func (c *Controller) Render(ctx context.Context, gate any) (string, map[string]a
 	})
 	if err != nil {
 		c.LastError = err.Error()
-		return "", nil, nil, err
+		return "", nil, nil, fmt.Errorf("failed to build runtime configuration: %w", err)
 	}
 	if err := runtimecfg.WriteJSON(c.RuntimePath, runtime); err != nil {
 		c.LastError = err.Error()
-		return "", nil, nil, err
+		return "", nil, nil, fmt.Errorf("failed to write runtime configuration: %w", err)
 	}
 	c.CurrentGateID = gateID
 	c.LastSnippet = snippet
@@ -125,35 +140,39 @@ func (c *Controller) Start(ctx context.Context, gate any) (map[string]any, error
 	})
 	if err != nil {
 		c.LastError = err.Error()
-		return nil, err
+		return nil, fmt.Errorf("failed to discover or download sing-box: %w", err)
 	}
 	checkOut, err := singbox.Check(ctx, bin, path)
 	if err != nil {
 		c.LastError = tail(checkOut, 2000)
-		return nil, fmt.Errorf("sing-box check failed:\n%s", c.LastError)
+		return nil, fmt.Errorf("%w:\n%s", ErrSingBoxCheckFailed, c.LastError)
 	}
-	if err := os.MkdirAll(filepath.Dir(c.SingBoxLog), 0o755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(c.SingBoxLog), 0700); err != nil {
 		c.LastError = err.Error()
-		return nil, err
+		return nil, fmt.Errorf("failed to create log directory: %w", err)
 	}
 	logFile, err := os.OpenFile(c.SingBoxLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		c.LastError = err.Error()
-		return nil, err
+		return nil, fmt.Errorf("failed to open sing-box log file: %w", err)
 	}
-	_, _ = fmt.Fprintf(logFile, "\n=== sing-box start %s ===\n", time.Now().UTC().Format(time.RFC3339))
+	_, err = fmt.Fprintf(logFile, "\n=== sing-box start %s ===\n", time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		c.LastError = err.Error()
+		return nil, fmt.Errorf("failed to write to sing-box log file: %w", err)
+	}
 	_ = logFile.Close()
 
 	cmd := singbox.Command(bin, path)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		c.LastError = err.Error()
-		return nil, err
+		return nil, fmt.Errorf("failed to get stdout pipe: %w", err)
 	}
 	cmd.Stderr = cmd.Stdout
 	if err := cmd.Start(); err != nil {
 		c.LastError = err.Error()
-		return nil, err
+		return nil, fmt.Errorf("failed to start sing-box: %w", err)
 	}
 	go pumpProcessOutput(stdout, c.SingBoxLog)
 	done := make(chan error, 1)
@@ -171,7 +190,7 @@ func (c *Controller) Start(ctx context.Context, gate any) (map[string]any, error
 		if err != nil {
 			c.LastError += "\n" + err.Error()
 		}
-		return nil, fmt.Errorf("%s", c.LastError)
+		return nil, fmt.Errorf("%w: %s", ErrSingBox, c.LastError)
 	default:
 	}
 
@@ -209,12 +228,18 @@ func (c *Controller) stopLocked() map[string]any {
 		c.StartedAt = ""
 		return map[string]any{"ok": true, "stopped": false}
 	}
-	_ = c.process.Process.Signal(os.Interrupt)
+	if err := c.process.Process.Signal(os.Interrupt); err != nil {
+		c.LastError = err.Error()
+		return map[string]any{"ok": true, "stopped": false}
+	}
 	done := c.done
 	select {
 	case <-done:
 	case <-time.After(8 * time.Second):
-		_ = c.process.Process.Kill()
+		if err := c.process.Process.Kill(); err != nil {
+			c.LastError = err.Error()
+			return map[string]any{"ok": true, "stopped": false}
+		}
 		<-done
 	}
 	c.process = nil
@@ -269,7 +294,7 @@ func (c *Controller) RuntimeConfig(raw bool) (map[string]any, error) {
 	} else if _, err := os.Stat(c.RuntimePath); err == nil {
 		read, err := runtimecfg.ReadJSON(c.RuntimePath)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to read runtime configuration: %w", err)
 		}
 		data = read
 	} else {
