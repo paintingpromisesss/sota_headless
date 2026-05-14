@@ -167,8 +167,86 @@ The compose file exposes:
 - `16698` for the control API;
 - `2080` for Proxy mode.
 
+Ports are published on `127.0.0.1` by default, so the control API and local
+proxy are not exposed to the public network. Change the host side of the port
+mapping only if you intentionally want to publish them.
+
 For `SOTA_MODE=TUN`, compose includes `NET_ADMIN` and `/dev/net/tun`. For
 `SOTA_MODE=Proxy`, those privileges can be removed.
+
+## Ubuntu Server Setup
+
+1. Install Docker:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+. /etc/os-release
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+2. Prepare the app:
+
+```bash
+git clone <repo-url> sota_headless
+cd sota_headless
+cp .env.example .env
+nano .env
+```
+
+Minimum `.env`:
+
+```env
+SOTA_ACCESS_KEY=your_real_access_key
+SOTA_MODE=TUN
+SOTA_API_ENABLED=false
+SOTA_GATE_ID=
+```
+
+For HTTP/SOCKS proxy mode instead of TUN:
+
+```env
+SOTA_MODE=Proxy
+SOTA_PROXY_LISTEN=0.0.0.0:2080
+```
+
+3. Start:
+
+```bash
+sudo docker compose up -d --build
+sudo docker compose logs -f sota-headless
+```
+
+4. Check status:
+
+```bash
+sudo docker compose ps
+sudo docker compose logs --tail=200 sota-headless
+curl http://127.0.0.1:16698/health
+```
+
+If `SOTA_API_ENABLED=false`, the health endpoint is not started; use logs and
+`docker compose ps` instead.
+
+5. Update:
+
+```bash
+git pull
+sudo docker compose up -d --build
+```
+
+For `SOTA_MODE=TUN`, the host must have `/dev/net/tun`. On most Ubuntu kernels it
+already exists; otherwise run:
+
+```bash
+sudo modprobe tun
+ls -l /dev/net/tun
+```
 
 ## Development
 

@@ -150,7 +150,7 @@ func download(ctx context.Context, opts Options) (string, error) {
 	}
 	for _, candidate := range localCandidates(opts.Dir) {
 		if exists(candidate) {
-			if err := os.Chmod(candidate, 0600); err != nil {
+			if err := os.Chmod(candidate, 0o755); err != nil {
 				return "", fmt.Errorf("failed to set permissions on %s: %w", candidate, err)
 			}
 			return candidate, nil
@@ -203,7 +203,10 @@ func unpackTarGz(path, dstDir string) error {
 		if copyErr != nil {
 			return fmt.Errorf("failed to copy to %s: %w", target, copyErr)
 		}
-		return fmt.Errorf("failed to close file %s: %w", target, closeErr)
+		if closeErr != nil {
+			return fmt.Errorf("failed to close file %s: %w", target, closeErr)
+		}
+		return nil
 	}
 }
 
@@ -222,7 +225,7 @@ func unpackZip(path, dstDir string) error {
 			return fmt.Errorf("failed to open file %s in zip: %w", file.Name, err)
 		}
 		target := filepath.Join(dstDir, binaryName())
-		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
 		if err != nil {
 			rc.Close()
 			return fmt.Errorf("failed to open file %s: %w", target, err)
@@ -236,7 +239,10 @@ func unpackZip(path, dstDir string) error {
 		if closeInErr != nil {
 			return fmt.Errorf("failed to close file %s in zip: %w", file.Name, closeInErr)
 		}
-		return fmt.Errorf("failed to close file %s: %w", target, closeOutErr)
+		if closeOutErr != nil {
+			return fmt.Errorf("failed to close file %s: %w", target, closeOutErr)
+		}
+		return nil
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 FROM golang:1.26-bookworm AS build
 WORKDIR /src
-COPY go.mod ./
+COPY go.mod go.sum ./
+RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 RUN go test ./...
@@ -14,4 +15,5 @@ WORKDIR /app
 COPY --from=build /out/sota-headless /usr/local/bin/sota-headless
 RUN mkdir -p /app/bin /app/runtime /app/state /app/rule_sets
 EXPOSE 16698 2080
+STOPSIGNAL SIGTERM
 ENTRYPOINT ["sota-headless"]

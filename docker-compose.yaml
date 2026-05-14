@@ -9,8 +9,8 @@ services:
       SOTA_LISTEN: 0.0.0.0:16698
       SOTA_PROXY_LISTEN: 0.0.0.0:2080
     ports:
-      - "16698:16698"
-      - "2080:2080"
+      - "127.0.0.1:16698:16698"
+      - "127.0.0.1:2080:2080"
     volumes:
       - ./bin:/app/bin
       - ./runtime:/app/runtime

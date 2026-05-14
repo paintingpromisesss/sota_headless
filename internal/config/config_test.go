@@ -55,6 +55,39 @@ func TestAPIDisabledByDefault(t *testing.T) {
 	}
 }
 
+func TestLoadListenPrefersSOTAListen(t *testing.T) {
+	unsetEnv(t, "SOTA_ACCESS_KEY")
+	unsetEnv(t, "SOTA_LISTEN")
+	unsetEnv(t, "SOTA_SERVER_LISTEN")
+	t.Setenv("SOTA_ACCESS_KEY", "abc")
+	t.Setenv("SOTA_SERVER_LISTEN", "127.0.0.1:1111")
+	t.Setenv("SOTA_LISTEN", "0.0.0.0:2222")
+
+	cfg, err := config.Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Listen != "0.0.0.0:2222" {
+		t.Fatalf("listen = %q", cfg.Listen)
+	}
+}
+
+func TestLoadListenSupportsLegacySOTAServerListen(t *testing.T) {
+	unsetEnv(t, "SOTA_ACCESS_KEY")
+	unsetEnv(t, "SOTA_LISTEN")
+	unsetEnv(t, "SOTA_SERVER_LISTEN")
+	t.Setenv("SOTA_ACCESS_KEY", "abc")
+	t.Setenv("SOTA_SERVER_LISTEN", "127.0.0.1:1111")
+
+	cfg, err := config.Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Listen != "127.0.0.1:1111" {
+		t.Fatalf("listen = %q", cfg.Listen)
+	}
+}
+
 func unsetEnv(t *testing.T, key string) {
 	t.Helper()
 	old, ok := os.LookupEnv(key)

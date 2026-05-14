@@ -72,7 +72,7 @@ func Load(baseDir string) (Config, error) {
 		AccessKey:      env("SOTA_ACCESS_KEY", ""),
 		APIEnabled:     parseBool(env("SOTA_API_ENABLED", "false")),
 		Mode:           parseMode(env("SOTA_MODE", string(ModeTUN))),
-		Listen:         env("SOTA_SERVER_LISTEN", "127.0.0.1:16698"),
+		Listen:         env("SOTA_LISTEN", env("SOTA_SERVER_LISTEN", "127.0.0.1:16698")),
 		GateID:         env("SOTA_GATE_ID", ""),
 		APIBases:       splitCSV(env("SOTA_API_BASES", strings.Join(DefaultAPIBases, ","))),
 		HWID:           env("SOTA_HWID", ""),
