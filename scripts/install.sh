@@ -9,11 +9,18 @@ set -e
 
 REPO="paintingpromisesss/sota_headless"
 GITHUB_RAW="https://raw.githubusercontent.com/${REPO}/main"
-SOTA_VERSION="${SOTA_VERSION:-v1.1.0}"
-if [ "$SOTA_VERSION" = "latest" ]; then
-    GITHUB_RELEASES="https://github.com/${REPO}/releases/latest/download"
-else
+
+# Default to latest stable release, or use explicit SOTA_VERSION if provided (e.g. SOTA_VERSION=v1.1.0)
+if [ -n "$SOTA_VERSION" ] && [ "$SOTA_VERSION" != "latest" ]; then
+    case "$SOTA_VERSION" in
+        v*) ;;
+        *)  SOTA_VERSION="v${SOTA_VERSION}" ;;
+    esac
     GITHUB_RELEASES="https://github.com/${REPO}/releases/download/${SOTA_VERSION}"
+    INSTALL_VERSION="$SOTA_VERSION"
+else
+    GITHUB_RELEASES="https://github.com/${REPO}/releases/latest/download"
+    INSTALL_VERSION="latest"
 fi
 
 BIN_DST="/usr/bin/sota-headless"
@@ -338,9 +345,9 @@ main() {
     detect_init
     ARCH=$(detect_arch)
     if [ "$LANG_UI" = "ru" ]; then
-        info "Архитектура: $ARCH (система инициализации: $INIT_SYSTEM)"
+        info "Архитектура: $ARCH (система: $INIT_SYSTEM, версия: $INSTALL_VERSION)"
     else
-        info "Architecture: $ARCH (init system: $INIT_SYSTEM)"
+        info "Architecture: $ARCH (init: $INIT_SYSTEM, version: $INSTALL_VERSION)"
     fi
 
     check_existing
