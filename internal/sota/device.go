@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -46,6 +47,7 @@ func LoadOrCreateDevice(stateDir, envHWID, envDeviceName string) (Device, error)
 		if jsonErr := writeJSONAtomic(path, device); jsonErr != nil {
 			return Device{}, fmt.Errorf("failed to write device.json: %w", jsonErr)
 		}
+		slog.Info("generated new device identity", "device_name", device.DeviceName, "path", path)
 		data, err = os.ReadFile(path)
 		if err != nil {
 			return Device{}, fmt.Errorf("failed to reread device.json: %w", err)
@@ -67,6 +69,7 @@ func LoadOrCreateDevice(stateDir, envHWID, envDeviceName string) (Device, error)
 	if device.HWID == "" || device.DeviceName == "" {
 		return Device{}, ErrInvalidDevice
 	}
+	slog.Info("loaded device configuration", "device_name", device.DeviceName, "path", path)
 	return device, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 
@@ -80,14 +81,24 @@ func (c *Client) RequestJSON(ctx context.Context, path string, query url.Values,
 		}
 	}
 	var lastErr error
-	for _, base := range candidates {
+	for i, base := range candidates {
+		slog.Debug("requesting Sota API", "method", method, "base", base, "path", path)
 		if err := c.requestJSONBase(ctx, base, path, query, method, target); err != nil {
 			lastErr = err
+			if len(candidates) > 1 && i < len(candidates)-1 {
+				slog.Warn("Sota API base request failed, trying next base", "failed_base", base, "path", path, "next_base", candidates[i+1], "error", err)
+			} else {
+				slog.Warn("Sota API base request failed", "failed_base", base, "path", path, "error", err)
+			}
 			continue
+		}
+		if c.ActiveBase != "" && c.ActiveBase != base {
+			slog.Info("switched active API base", "previous_base", c.ActiveBase, "new_base", base)
 		}
 		c.ActiveBase = base
 		return nil
 	}
+	slog.Error("all Sota API bases failed", "path", path, "candidates_tried", len(candidates), "last_error", lastErr)
 	return fmt.Errorf("all API bases failed for %s: %w", path, lastErr)
 }
 

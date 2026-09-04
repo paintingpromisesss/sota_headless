@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,18 +46,24 @@ func New(cfg config.Config) (*Controller, error) {
 }
 
 func (c *Controller) Profile(ctx context.Context) (map[string]any, error) {
+	slog.Debug("fetching subscription profile")
 	profile, err := c.Client.Profile(ctx)
 	if err != nil {
+		slog.Error("failed to fetch subscription profile", "error", err)
 		return nil, fmt.Errorf("failed to fetch profile: %w", err)
 	}
+	slog.Debug("successfully fetched subscription profile")
 	return profile, nil
 }
 
 func (c *Controller) Locations(ctx context.Context) ([]map[string]any, error) {
+	slog.Debug("fetching locations list")
 	locations, err := c.Client.Locations(ctx)
 	if err != nil {
+		slog.Error("failed to fetch locations list", "error", err)
 		return nil, fmt.Errorf("failed to fetch locations: %w", err)
 	}
+	slog.Debug("successfully fetched locations list", "count", len(locations))
 	return locations, nil
 }
 
@@ -65,7 +72,9 @@ func (c *Controller) Nodes(ctx context.Context) ([]provider.Node, error) {
 	c.mu.RLock()
 	if len(c.cache) > 0 && time.Since(c.cachedAt) < c.cacheTTL {
 		nodes := c.cache
+		age := time.Since(c.cachedAt).Round(time.Second)
 		c.mu.RUnlock()
+		slog.Debug("serving nodes from cache", "nodes_count", len(nodes), "cache_age", age.String(), "cache_ttl", c.cacheTTL.String())
 		return nodes, nil
 	}
 	c.mu.RUnlock()
@@ -75,26 +84,40 @@ func (c *Controller) Nodes(ctx context.Context) ([]provider.Node, error) {
 
 	// Double-check after acquiring write lock
 	if len(c.cache) > 0 && time.Since(c.cachedAt) < c.cacheTTL {
-		return c.cache, nil
+		nodes := c.cache
+		age := time.Since(c.cachedAt).Round(time.Second)
+		slog.Debug("serving nodes from cache", "nodes_count", len(nodes), "cache_age", age.String(), "cache_ttl", c.cacheTTL.String())
+		return nodes, nil
 	}
 
+	if len(c.cache) > 0 {
+		slog.Info("node cache expired, refreshing from Sota API", "cached_age", time.Since(c.cachedAt).Round(time.Second).String(), "cache_ttl", c.cacheTTL.String())
+	} else {
+		slog.Info("node cache empty, fetching from Sota API")
+	}
+
+	start := time.Now()
 	nodes, err := provider.FetchAllNodes(ctx, c.Client)
 	if err != nil {
 		c.LastError = err.Error()
+		slog.Error("failed to fetch nodes from Sota API", "error", err, "duration", time.Since(start).Round(time.Millisecond).String())
 		return nil, err
 	}
 	c.cache = nodes
 	c.cachedAt = time.Now()
 	c.LastError = ""
+	slog.Info("node cache updated successfully", "nodes_count", len(nodes), "cache_ttl", c.cacheTTL.String(), "duration", time.Since(start).Round(time.Millisecond).String())
 	return nodes, nil
 }
 
 // InvalidateCache forces a fresh fetch on next Nodes() call.
 func (c *Controller) InvalidateCache() {
 	c.mu.Lock()
+	prevCount := len(c.cache)
 	c.cache = nil
 	c.cachedAt = time.Time{}
 	c.mu.Unlock()
+	slog.Info("node cache invalidated", "previous_nodes_count", prevCount)
 }
 
 func (c *Controller) Status() map[string]any {

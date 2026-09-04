@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"sort"
 	"strings"
@@ -130,8 +131,10 @@ func (n Node) ToSingboxOutbound() map[string]any {
 
 // FetchAllNodes queries Sota API, fetches all locations and their Reality configs concurrently
 func FetchAllNodes(ctx context.Context, client *sota.Client) ([]Node, error) {
+	slog.Info("fetching server locations from Sota API")
 	locations, err := client.Locations(ctx)
 	if err != nil {
+		slog.Error("failed to fetch locations from Sota API", "error", err)
 		return nil, fmt.Errorf("failed to fetch locations: %w", err)
 	}
 
@@ -157,8 +160,11 @@ func FetchAllNodes(ctx context.Context, client *sota.Client) ([]Node, error) {
 	}
 
 	if len(locs) == 0 {
+		slog.Error("no valid locations found in API response")
 		return nil, fmt.Errorf("no valid locations found in API response")
 	}
+
+	slog.Info("retrieved server locations, querying connection configs", "locations_count", len(locs))
 
 	// Concurrently query connection snippet for each location
 	results := make([]Node, 0, len(locs))
@@ -181,13 +187,16 @@ func FetchAllNodes(ctx context.Context, client *sota.Client) ([]Node, error) {
 
 			snippet, err := client.Connect(ctx, l.id)
 			if err != nil {
+				slog.Warn("failed to fetch connection config for gate", "gate_id", l.id, "name", l.name, "country", l.countryCode, "error", err)
 				return
 			}
 
 			node, err := parseSnippet(snippet, l.id, l.name, l.countryCode, l.emoji)
 			if err != nil {
+				slog.Warn("failed to parse connection snippet for gate", "gate_id", l.id, "name", l.name, "error", err)
 				return
 			}
+			slog.Debug("successfully fetched gate config", "gate_id", l.id, "name", node.DisplayName(), "server", node.Server, "port", node.Port)
 
 			mu.Lock()
 			results = append(results, node)
@@ -198,6 +207,7 @@ func FetchAllNodes(ctx context.Context, client *sota.Client) ([]Node, error) {
 	wg.Wait()
 
 	if len(results) == 0 {
+		slog.Error("failed to parse any nodes from Sota connect API")
 		return nil, fmt.Errorf("failed to parse any nodes from Sota connect API")
 	}
 
@@ -205,6 +215,7 @@ func FetchAllNodes(ctx context.Context, client *sota.Client) ([]Node, error) {
 		return results[i].GateID < results[j].GateID
 	})
 
+	slog.Info("successfully fetched and parsed nodes", "nodes_count", len(results))
 	return results, nil
 }
 

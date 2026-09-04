@@ -217,13 +217,16 @@ write_config() {
     OLD_DEVICE_NAME=""
     OLD_CACHE_TTL="30m"
     OLD_LISTEN="0.0.0.0:16698"
+    OLD_LOG_LEVEL="info"
     if [ -f "$CONFIG_FILE" ]; then
         OLD_HWID=$(grep '^SOTA_HWID=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
         OLD_DEVICE_NAME=$(grep '^SOTA_DEVICE_NAME=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
         OLD_CACHE_TTL=$(grep '^SOTA_CACHE_TTL=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
         OLD_LISTEN=$(grep '^SOTA_LISTEN=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
+        OLD_LOG_LEVEL=$(grep '^SOTA_LOG_LEVEL=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
         [ -z "$OLD_CACHE_TTL" ] && OLD_CACHE_TTL="30m"
         [ -z "$OLD_LISTEN" ]    && OLD_LISTEN="0.0.0.0:16698"
+        [ -z "$OLD_LOG_LEVEL" ] && OLD_LOG_LEVEL="info"
     fi
 
     cat > "$CONFIG_FILE" << EOF
@@ -234,6 +237,7 @@ SOTA_ACCESS_KEY=${ACCESS_KEY}
 SOTA_BASE_DIR=${CONFIG_DIR}
 SOTA_LISTEN=${OLD_LISTEN}
 SOTA_CACHE_TTL=${OLD_CACHE_TTL}
+SOTA_LOG_LEVEL=${OLD_LOG_LEVEL}
 EOF
 
     if [ -n "$OLD_HWID" ]; then

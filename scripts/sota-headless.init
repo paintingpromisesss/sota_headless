@@ -34,6 +34,7 @@ start_service() {
         SOTA_LISTEN="${SOTA_LISTEN:-0.0.0.0:16698}" \
         SOTA_API_ENABLED="true" \
         SOTA_CACHE_TTL="${SOTA_CACHE_TTL:-30m}" \
+        SOTA_LOG_LEVEL="${SOTA_LOG_LEVEL:-info}" \
         SOTA_API_BASES="${SOTA_API_BASES:-https://meowconnect.com/api/v1,https://sota.ac/api/v1}" \
         SOTA_USER_AGENT="${SOTA_USER_AGENT:-Sota Connect (v1.7.7/windows)}" \
         SOTA_ACCEPT_LANGUAGE="${SOTA_ACCEPT_LANGUAGE:-ru}" \

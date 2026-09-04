@@ -1,6 +1,10 @@
 package controller
 
-import "testing"
+import (
+	"testing"
+
+	"sota-headless/internal/provider"
+)
 
 func TestSelectGateID(t *testing.T) {
 	locations := []map[string]any{
@@ -35,5 +39,17 @@ func TestRedact(t *testing.T) {
 	redacted := Redact(raw).(map[string]any)
 	if redacted["uuid"] == raw["uuid"] {
 		t.Fatal("uuid was not redacted")
+	}
+}
+
+func TestInvalidateCacheLogging(t *testing.T) {
+	ctrl := &Controller{
+		cache: []provider.Node{
+			{GateID: 1, Name: "Node 1"},
+		},
+	}
+	ctrl.InvalidateCache()
+	if len(ctrl.cache) != 0 {
+		t.Fatalf("cache length = %d, want 0", len(ctrl.cache))
 	}
 }

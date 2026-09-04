@@ -11,11 +11,14 @@ func TestLoadFromEnvironment(t *testing.T) {
 	unsetEnv(t, "SOTA_ACCESS_KEY")
 	unsetEnv(t, "SOTA_API_ENABLED")
 	unsetEnv(t, "SOTA_API_BASES")
-	unsetEnv(t, "SOTA_CACHE_TTL")
+	unsetEnv(t, "SOTA_LOG_LEVEL")
+	unsetEnv(t, "SOTA_LOG_FORMAT")
 	t.Setenv("SOTA_ACCESS_KEY", "abc")
 	t.Setenv("SOTA_API_ENABLED", "yes")
 	t.Setenv("SOTA_API_BASES", "https://a/api/v1, https://b/api/v1")
 	t.Setenv("SOTA_CACHE_TTL", "10m")
+	t.Setenv("SOTA_LOG_LEVEL", "debug")
+	t.Setenv("SOTA_LOG_FORMAT", "json")
 	dir := t.TempDir()
 	cfg, err := config.Load(dir)
 	if err != nil {
@@ -32,6 +35,12 @@ func TestLoadFromEnvironment(t *testing.T) {
 	}
 	if cfg.CacheTTL != 10*time.Minute {
 		t.Fatalf("cache TTL = %v", cfg.CacheTTL)
+	}
+	if cfg.LogLevel != "debug" {
+		t.Fatalf("log level = %q, want debug", cfg.LogLevel)
+	}
+	if cfg.LogFormat != "json" {
+		t.Fatalf("log format = %q, want json", cfg.LogFormat)
 	}
 }
 

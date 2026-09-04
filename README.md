@@ -85,6 +85,8 @@ wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sot
 SOTA_ACCESS_KEY=ваш-ключ-доступа
 SOTA_LISTEN=0.0.0.0:16698
 SOTA_CACHE_TTL=30m
+# Уровень логирования: debug, info (по умолчанию), warn, error
+SOTA_LOG_LEVEL=info
 ```
 
 После изменения конфигурации перезапустите сервис:

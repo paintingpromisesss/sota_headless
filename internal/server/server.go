@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"time"
@@ -32,14 +33,19 @@ func ListenAndServe(ctx context.Context, c *controller.Controller, listen string
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
 		defer cancel()
+		slog.Info("stopping HTTP server...")
 		if err := app.ShutdownWithContext(shutdownCtx); err != nil {
-			fmt.Printf("Error shutting down server: %v\n", err)
+			slog.Error("error shutting down HTTP server", "error", err)
+		} else {
+			slog.Info("HTTP server stopped gracefully")
 		}
 	}()
-	fmt.Printf("%s v%s listening on http://%s\n", config.AppName, config.AppVersion, addr)
-	fmt.Println("Endpoints: GET /health /status /profile /locations /device")
-	fmt.Println("           GET /sub/mihomo /sub/vless /sub/base64 /sub/singbox")
-	fmt.Println("           POST /sub/refresh")
+	slog.Info("HTTP server listening", "service", config.AppName, "version", config.AppVersion, "address", "http://"+addr)
+	slog.Info("available endpoints",
+		"info", "/health, /status, /profile, /locations, /device",
+		"sub", "/sub, /sub/mihomo, /sub/vless, /sub/base64, /sub/singbox",
+		"ops", "POST /sub/refresh",
+	)
 	if err := app.Listen(addr, fiber.ListenConfig{DisableStartupMessage: true}); err != nil {
 		return fmt.Errorf("server error: %w", err)
 	}
@@ -52,6 +58,7 @@ func (s Server) app() *fiber.App {
 		JSONEncoder: controller.MarshalJSON,
 	})
 	app.Use(recover.New())
+	app.Use(requestLogger())
 
 	// Info endpoints
 	app.Get("/", s.health)
@@ -157,11 +164,14 @@ func (s Server) subSingbox(c fiber.Ctx) error {
 }
 
 func (s Server) subRefresh(c fiber.Ctx) error {
+	slog.Info("manual cache refresh requested", "ip", c.IP())
 	s.Controller.InvalidateCache()
 	nodes, err := s.Controller.Nodes(requestContext(c))
 	if err != nil {
+		slog.Error("manual cache refresh failed", "error", err)
 		return writeError(c, err)
 	}
+	slog.Info("manual cache refresh completed", "nodes_count", len(nodes))
 	return writeJSON(c, fiber.StatusOK, map[string]any{
 		"ok":          true,
 		"nodes_count": len(nodes),
@@ -191,7 +201,40 @@ func requestContext(c fiber.Ctx) context.Context {
 }
 
 func writeError(c fiber.Ctx, err error) error {
+	slog.Error("endpoint returned error", "path", c.Path(), "error", err)
 	return writeJSON(c, fiber.StatusInternalServerError, map[string]any{"error": err.Error()})
+}
+
+func requestLogger() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		start := time.Now()
+		err := c.Next()
+		latency := time.Since(start)
+		status := c.Response().StatusCode()
+		method := c.Method()
+		path := c.Path()
+		ip := c.IP()
+
+		attrs := []any{
+			"status", status,
+			"method", method,
+			"path", path,
+			"ip", ip,
+			"latency", latency.Round(time.Microsecond).String(),
+		}
+
+		if err != nil {
+			attrs = append(attrs, "error", err)
+			slog.Error("http request error", attrs...)
+		} else if status >= 500 {
+			slog.Error("http request", attrs...)
+		} else if status >= 400 {
+			slog.Warn("http request", attrs...)
+		} else {
+			slog.Info("http request", attrs...)
+		}
+		return err
+	}
 }
 
 func writeJSON(c fiber.Ctx, status int, value any) error {

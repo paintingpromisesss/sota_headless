@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -12,6 +13,7 @@ import (
 
 	"sota-headless/internal/config"
 	"sota-headless/internal/controller"
+	"sota-headless/internal/logger"
 	"sota-headless/internal/provider"
 	"sota-headless/internal/server"
 )
@@ -25,16 +27,20 @@ func run() int {
 	debug.SetMemoryLimit(48 << 20) // 48 MiB
 
 	var (
-		listen  string
-		profile bool
-		locs    bool
-		nodes   bool
-		vless   bool
-		base64  bool
-		mihomo  bool
+		listen    string
+		logLevel  string
+		logFormat string
+		profile   bool
+		locs      bool
+		nodes     bool
+		vless     bool
+		base64    bool
+		mihomo    bool
 	)
 
 	flag.StringVar(&listen, "listen", "", "HTTP listen address (default SOTA_LISTEN or 0.0.0.0:16698)")
+	flag.StringVar(&logLevel, "log-level", "", "Log level: debug, info, warn, error (default SOTA_LOG_LEVEL or info)")
+	flag.StringVar(&logFormat, "log-format", "", "Log format: text, json (default SOTA_LOG_FORMAT or text)")
 	flag.BoolVar(&profile, "profile", false, "Fetch subscription profile and exit")
 	flag.BoolVar(&locs, "locations", false, "Fetch server locations list and exit")
 	flag.BoolVar(&nodes, "nodes", false, "Fetch all nodes with connection params and exit (JSON)")
@@ -43,13 +49,26 @@ func run() int {
 	flag.BoolVar(&mihomo, "mihomo", false, "Print Mihomo YAML proxy-provider and exit")
 	flag.Parse()
 
+	isCLICommand := profile || locs || nodes || vless || base64 || mihomo
+
 	cfg, err := config.Load("")
 	if err != nil {
+		logger.Setup("info", "text", os.Stderr)
 		return fail(err)
 	}
 	if listen != "" {
 		cfg.Listen = listen
 	}
+	if logLevel != "" {
+		cfg.LogLevel = logLevel
+	} else if isCLICommand && os.Getenv("SOTA_LOG_LEVEL") == "" {
+		cfg.LogLevel = "warn"
+	}
+	if logFormat != "" {
+		cfg.LogFormat = logFormat
+	}
+
+	logger.Setup(cfg.LogLevel, cfg.LogFormat, os.Stderr)
 
 	ctrl, err := controller.New(cfg)
 	if err != nil {
@@ -118,6 +137,6 @@ func printJSON(value any, err error) int {
 }
 
 func fail(err error) int {
-	_, _ = fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+	slog.Error("fatal error", "error", err)
 	return 1
 }

@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	AppName    = "sota-headless"
-	AppVersion = "1.0.0"
-
+	AppName          = "sota-headless"
 	DefaultUserAgent = "Sota Connect (v1.7.7/windows)"
 )
+
+var AppVersion = "1.0.1"
 
 var DefaultAPIBases = []string{
 	"https://meowconnect.com/api/v1",
@@ -36,6 +36,7 @@ type Config struct {
 	UserAgent      string
 	AcceptLanguage string
 	LogLevel       string
+	LogFormat      string
 	APIBases       []string
 	CacheTTL       time.Duration
 }
@@ -76,6 +77,7 @@ func Load(baseDir string) (Config, error) {
 		UserAgent:      env("SOTA_USER_AGENT", DefaultUserAgent),
 		AcceptLanguage: env("SOTA_ACCEPT_LANGUAGE", "ru"),
 		LogLevel:       env("SOTA_LOG_LEVEL", "info"),
+		LogFormat:      env("SOTA_LOG_FORMAT", "text"),
 		CacheTTL:       cacheTTL,
 	}
 	if cfg.AccessKey == "" || cfg.AccessKey == "SOTA_ACCESS_KEY" {

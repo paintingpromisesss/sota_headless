@@ -85,6 +85,8 @@ The configuration file is stored at `/etc/sota-headless/sota-headless.env`:
 SOTA_ACCESS_KEY=your-access-key-here
 SOTA_LISTEN=0.0.0.0:16698
 SOTA_CACHE_TTL=30m
+# Log level: debug, info (default), warn, error
+SOTA_LOG_LEVEL=info
 ```
 
 Restart the service after making changes:
