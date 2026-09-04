@@ -32,6 +32,25 @@ warn()  { printf "${YEL}  ! %s${NC}\n" "$1"; }
 error() { printf "${RED}  ✗ %s${NC}\n" "$1"; exit 1; }
 ask()   { printf "${YEL}  → %s${NC} " "$1"; }
 
+# ── Language selection ────────────────────────────────────────────────────────
+select_language() {
+    printf "\n${YEL}════════════════════════════════════════════${NC}\n"
+    printf "${YEL}    sota-headless  ·  OpenWrt installer${NC}\n"
+    printf "${YEL}════════════════════════════════════════════${NC}\n\n"
+    printf "${GRY}  [1] English (default)\n  [2] Русский${NC}\n\n"
+    ask "Select language / Выберите язык [1/2]:"
+    read LANG_CHOICE
+
+    case "$LANG_CHOICE" in
+        2|[rR][uU])
+            LANG_UI="ru"
+            ;;
+        *)
+            LANG_UI="en"
+            ;;
+    esac
+}
+
 # ── Detect arch ───────────────────────────────────────────────────────────────
 detect_arch() {
     case "$(uname -m)" in
@@ -40,22 +59,44 @@ detect_arch() {
         x86_64)         echo "linux-amd64"  ;;
         mips)           echo "linux-mips"   ;;
         mipsel|mipsle)  echo "linux-mipsle" ;;
-        *)              error "Unsupported arch: $(uname -m). Build manually." ;;
+        *)
+            if [ "$LANG_UI" = "ru" ]; then
+                error "Неподдерживаемая архитектура: $(uname -m). Скомпилируйте вручную."
+            else
+                error "Unsupported arch: $(uname -m). Build manually."
+            fi
+            ;;
     esac
 }
 
 # ── Check deps ────────────────────────────────────────────────────────────────
 check_deps() {
     for cmd in wget chmod; do
-        command -v "$cmd" >/dev/null 2>&1 || error "Missing: $cmd"
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            if [ "$LANG_UI" = "ru" ]; then
+                error "Отсутствует необходимая утилита: $cmd"
+            else
+                error "Missing required utility: $cmd"
+            fi
+        fi
     done
 }
 
 # ── Download ──────────────────────────────────────────────────────────────────
 download() {
     URL="$1"; DST="$2"
-    info "Fetching $(basename "$DST") ..."
-    wget -q -O "$DST" "$URL" || error "Download failed: $URL"
+    if [ "$LANG_UI" = "ru" ]; then
+        info "Загрузка $(basename "$DST") ..."
+    else
+        info "Fetching $(basename "$DST") ..."
+    fi
+    wget -q -O "$DST" "$URL" || {
+        if [ "$LANG_UI" = "ru" ]; then
+            error "Ошибка загрузки: $URL"
+        else
+            error "Download failed: $URL"
+        fi
+    }
 }
 
 # ── Check if service already running ─────────────────────────────────────────
@@ -63,16 +104,28 @@ check_existing() {
     UPGRADING=0
     if [ -x "$INIT_DST" ]; then
         if "$INIT_DST" status >/dev/null 2>&1; then
-            warn "sota-headless is already running — this is an upgrade"
+            if [ "$LANG_UI" = "ru" ]; then
+                warn "Служба sota-headless уже запущена — выполняется обновление"
+            else
+                warn "sota-headless is already running — this is an upgrade"
+            fi
             UPGRADING=1
         else
-            warn "sota-headless init script exists but service is stopped"
+            if [ "$LANG_UI" = "ru" ]; then
+                warn "Скрипт службы существует, но сервис остановлен"
+            else
+                warn "sota-headless init script exists but service is stopped"
+            fi
             UPGRADING=1
         fi
     fi
 
     if [ -f "$DEVICE_JSON" ]; then
-        info "Found existing device.json — will preserve device identity"
+        if [ "$LANG_UI" = "ru" ]; then
+            info "Найден существующий device.json — идентификатор устройства сохранён"
+        else
+            info "Found existing device.json — will preserve device identity"
+        fi
         PRESERVE_DEVICE=1
     else
         PRESERVE_DEVICE=0
@@ -81,41 +134,77 @@ check_existing() {
 
 # ── Access key dialog ─────────────────────────────────────────────────────────
 ask_access_key() {
-    # Read current key from config if exists
     CURRENT_KEY=""
     if [ -f "$CONFIG_FILE" ]; then
         CURRENT_KEY=$(grep '^SOTA_ACCESS_KEY=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
-        # Ignore placeholder
         [ "$CURRENT_KEY" = "PUT_YOUR_SOTA_ACCESS_KEY_HERE" ] && CURRENT_KEY=""
     fi
 
-    hdr "Sota access key"
+    if [ "$LANG_UI" = "ru" ]; then
+        hdr "Ключ доступа Sota"
+    else
+        hdr "Sota access key"
+    fi
 
     if [ -n "$CURRENT_KEY" ]; then
-        info "Current key: ${GRY}${CURRENT_KEY}${NC}"
-        printf "${DIM}  Leave blank to keep it, or enter a new key to replace.${NC}\n"
-        ask "New access key (Enter to keep):"
+        if [ "$LANG_UI" = "ru" ]; then
+            info "Текущий ключ: ${GRY}${CURRENT_KEY}${NC}"
+            printf "${DIM}  Оставьте пустым, чтобы сохранить текущий ключ, или введите новый.${NC}\n"
+            ask "Новый ключ (Enter чтобы оставить):"
+        else
+            info "Current key: ${GRY}${CURRENT_KEY}${NC}"
+            printf "${DIM}  Leave blank to keep it, or enter a new key to replace.${NC}\n"
+            ask "New access key (Enter to keep):"
+        fi
         read INPUT_KEY
         if [ -z "$INPUT_KEY" ]; then
             ACCESS_KEY="$CURRENT_KEY"
-            info "Keeping existing access key"
+            if [ "$LANG_UI" = "ru" ]; then
+                info "Сохранён текущий ключ доступа"
+            else
+                info "Keeping existing access key"
+            fi
         else
             ACCESS_KEY="$INPUT_KEY"
-            ok "Access key updated"
+            if [ "$LANG_UI" = "ru" ]; then
+                ok "Ключ доступа обновлён"
+            else
+                ok "Access key updated"
+            fi
         fi
     else
-        printf "${DIM}  UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx${NC}\n"
-        ask "Access key:"
+        if [ "$LANG_UI" = "ru" ]; then
+            printf "${DIM}  Формат UUID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx${NC}\n"
+            ask "Ключ доступа:"
+        else
+            printf "${DIM}  UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx${NC}\n"
+            ask "Access key:"
+        fi
         read INPUT_KEY
-        [ -z "$INPUT_KEY" ] && error "Access key cannot be empty"
+        if [ -z "$INPUT_KEY" ]; then
+            if [ "$LANG_UI" = "ru" ]; then
+                error "Ключ доступа не может быть пустым"
+            else
+                error "Access key cannot be empty"
+            fi
+        fi
         ACCESS_KEY="$INPUT_KEY"
-        ok "Access key set"
+        if [ "$LANG_UI" = "ru" ]; then
+            ok "Ключ доступа установлен"
+        else
+            ok "Access key set"
+        fi
     fi
 
-    # Soft format check
     case "$ACCESS_KEY" in
         ????????-????-????-????-????????????) ;;
-        *) warn "Key format looks unusual — continuing anyway" ;;
+        *)
+            if [ "$LANG_UI" = "ru" ]; then
+                warn "Формат ключа выглядит нестандартно — продолжаем"
+            else
+                warn "Key format looks unusual — continuing anyway"
+            fi
+            ;;
     esac
 }
 
@@ -123,7 +212,6 @@ ask_access_key() {
 write_config() {
     mkdir -p "$CONFIG_DIR" "$STATE_DIR"
 
-    # Preserve any custom overrides from existing config (HWID, DEVICE_NAME, etc.)
     OLD_HWID=""
     OLD_DEVICE_NAME=""
     OLD_CACHE_TTL="30m"
@@ -147,7 +235,6 @@ SOTA_LISTEN=${OLD_LISTEN}
 SOTA_CACHE_TTL=${OLD_CACHE_TTL}
 EOF
 
-    # Re-append optional overrides only if they were set before
     if [ -n "$OLD_HWID" ]; then
         echo "SOTA_HWID=${OLD_HWID}" >> "$CONFIG_FILE"
     fi
@@ -156,28 +243,41 @@ EOF
     fi
 
     chmod 600 "$CONFIG_FILE"
-    ok "Config saved to $CONFIG_FILE"
+    if [ "$LANG_UI" = "ru" ]; then
+        ok "Конфигурация сохранена в $CONFIG_FILE"
+    else
+        ok "Config saved to $CONFIG_FILE"
+    fi
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 main() {
-    printf "\n${YEL}════════════════════════════════════════════${NC}\n"
-    printf "${YEL}    sota-headless  ·  OpenWrt installer${NC}\n"
-    printf "${YEL}════════════════════════════════════════════${NC}\n"
+    select_language
 
     check_deps
     ARCH=$(detect_arch)
-    info "Architecture: $ARCH"
+    if [ "$LANG_UI" = "ru" ]; then
+        info "Архитектура: $ARCH"
+    else
+        info "Architecture: $ARCH"
+    fi
 
     check_existing
 
     ask_access_key
 
-    hdr "Downloading"
+    if [ "$LANG_UI" = "ru" ]; then
+        hdr "Загрузка файлов"
+    else
+        hdr "Downloading"
+    fi
 
-    # Stop service before upgrade
     if [ "$UPGRADING" = "1" ] && [ -x "$INIT_DST" ]; then
-        info "Stopping existing service..."
+        if [ "$LANG_UI" = "ru" ]; then
+            info "Остановка существующей службы..."
+        else
+            info "Stopping existing service..."
+        fi
         "$INIT_DST" stop 2>/dev/null || true
         sleep 1
     fi
@@ -187,33 +287,61 @@ main() {
     download "${GITHUB_RELEASES}/sota-headless-${ARCH}" "$TMP_BIN"
     chmod +x "$TMP_BIN"
     mv "$TMP_BIN" "$BIN_DST"
-    ok "Binary → $BIN_DST"
+    if [ "$LANG_UI" = "ru" ]; then
+        ok "Бинарный файл → $BIN_DST"
+    else
+        ok "Binary → $BIN_DST"
+    fi
 
     # Init script
     download "${GITHUB_RAW}/scripts/sota-headless.init" "$INIT_DST"
     chmod +x "$INIT_DST"
-    ok "Init script → $INIT_DST"
+    if [ "$LANG_UI" = "ru" ]; then
+        ok "Скрипт службы → $INIT_DST"
+    else
+        ok "Init script → $INIT_DST"
+    fi
 
     # Config
     write_config
 
-    # device.json: already preserved if it existed (we never touched it)
     if [ "$PRESERVE_DEVICE" = "1" ]; then
-        ok "Device identity preserved ($DEVICE_JSON)"
+        if [ "$LANG_UI" = "ru" ]; then
+            ok "Идентификатор устройства сохранён ($DEVICE_JSON)"
+        else
+            ok "Device identity preserved ($DEVICE_JSON)"
+        fi
     else
-        info "Device identity will be generated on first start"
+        if [ "$LANG_UI" = "ru" ]; then
+            info "Идентификатор устройства будет сгенерирован при первом запуске"
+        else
+            info "Device identity will be generated on first start"
+        fi
     fi
 
-    hdr "Starting service"
+    if [ "$LANG_UI" = "ru" ]; then
+        hdr "Запуск службы"
+    else
+        hdr "Starting service"
+    fi
     "$INIT_DST" enable
     "$INIT_DST" start
     sleep 2
 
     if wget -q -O /dev/null "http://127.0.0.1:16698/health" 2>/dev/null; then
-        ok "Service is up and responding!"
+        if [ "$LANG_UI" = "ru" ]; then
+            ok "Служба запущена и отвечает на запросы!"
+        else
+            ok "Service is up and responding!"
+        fi
     else
-        warn "Service started but /health not responding yet — may still be initializing"
-        info "Check: logread | grep sota"
+        if [ "$LANG_UI" = "ru" ]; then
+            warn "Служба запущена, но /health пока не ответил — возможно, идёт инициализация"
+            info "Проверка: logread | grep sota"
+        else
+            warn "Service started but /health not responding yet — may still be initializing"
+            info "Check: logread | grep sota"
+        fi
     fi
 
     # Detect LAN IP on OpenWrt (br-lan or uci network.lan.ipaddr)
@@ -223,17 +351,31 @@ main() {
     [ -z "$ROUTER_IP" ] && ROUTER_IP="192.168.0.1"
 
     printf "\n${YEL}════════════════════════════════════════════${NC}\n"
-    printf "${YEL}    Done!${NC}\n"
-    printf "${YEL}════════════════════════════════════════════${NC}\n\n"
-    printf "${GRY}  Subscription URLs:${NC}\n\n"
-    printf "  ${YEL}Mihomo / Zashboard${NC}\n"
-    printf "  ${DIM}http://${ROUTER_IP}:16698/sub/mihomo${NC}\n\n"
-    printf "  ${YEL}Base64 (universal)${NC}\n"
-    printf "  ${DIM}http://${ROUTER_IP}:16698/sub/base64${NC}\n\n"
-    printf "  ${YEL}Plain vless:// links${NC}\n"
-    printf "  ${DIM}http://${ROUTER_IP}:16698/sub/vless${NC}\n\n"
-    printf "${GRY}  Health:  ${DIM}curl http://127.0.0.1:16698/health${NC}\n"
-    printf "${GRY}  Logs:    ${DIM}logread | grep sota${NC}\n\n"
+    if [ "$LANG_UI" = "ru" ]; then
+        printf "${YEL}    Готово!${NC}\n"
+        printf "${YEL}════════════════════════════════════════════${NC}\n\n"
+        printf "${GRY}  Ссылки на подписки:${NC}\n\n"
+        printf "  ${YEL}Mihomo / Zashboard${NC}\n"
+        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/mihomo${NC}\n\n"
+        printf "  ${YEL}Base64 (универсальный)${NC}\n"
+        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/base64${NC}\n\n"
+        printf "  ${YEL}Прямые ссылки vless://${NC}\n"
+        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/vless${NC}\n\n"
+        printf "${GRY}  Проверка: ${DIM}curl http://127.0.0.1:16698/health${NC}\n"
+        printf "${GRY}  Логи:     ${DIM}logread | grep sota${NC}\n\n"
+    else
+        printf "${YEL}    Done!${NC}\n"
+        printf "${YEL}════════════════════════════════════════════${NC}\n\n"
+        printf "${GRY}  Subscription URLs:${NC}\n\n"
+        printf "  ${YEL}Mihomo / Zashboard${NC}\n"
+        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/mihomo${NC}\n\n"
+        printf "  ${YEL}Base64 (universal)${NC}\n"
+        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/base64${NC}\n\n"
+        printf "  ${YEL}Plain vless:// links${NC}\n"
+        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/vless${NC}\n\n"
+        printf "${GRY}  Health:  ${DIM}curl http://127.0.0.1:16698/health${NC}\n"
+        printf "${GRY}  Logs:    ${DIM}logread | grep sota${NC}\n\n"
+    fi
 }
 
 main "$@"
