@@ -80,7 +80,12 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+          prerelease: true
+          make_latest: false
           body: |
+            > **Experimental Pre-release (v1.1.0)**
+            > Universal Linux installer with systemd support alongside OpenWrt procd.
+
             ### Supported architectures
             | File | Target |
             |------|--------|

@@ -36,19 +36,27 @@ Sota Connect закрывает свои подписки внутри проп�
 
 ---
 
-## Установка на OpenWrt
+## Установка
 
-Подключитесь к роутеру по SSH и выполните команду:
+### Быстрая установка (Linux / OpenWrt)
 
+Инсталлятор автоматически определяет систему (Linux с `systemd` или OpenWrt с `procd`), архитектуру процессора и настраивает фоновую службу:
+
+**Для Linux (Ubuntu / Debian / CentOS / Arch / VPS / серверы):**
+```sh
+curl -fsSL https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh | sudo sh
+```
+
+**Для OpenWrt (роутеры):**
 ```sh
 wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
 ```
 
 Инсталлятор сделает всё автоматически:
-- определит архитектуру процессора роутера
+- определит систему инициализации (`systemd` или `procd`) и архитектуру процессора
 - запросит ваш ключ доступа (Access Key)
-- скачает бинарник и настроит системную службу procd
-- запустит сервис и выведет ссылки на подписки
+- скачает бинарник и настроит системную службу
+- запустит фоновый сервис и выведет ссылки на подписки
 
 ### Поддерживаемые роутеры
 
@@ -116,11 +124,16 @@ wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sot
 ## Полезные команды
 
 ```sh
-# Статус службы
-service sota-headless status
+# Управление службой:
+# Linux (systemd):
+systemctl status sota-headless
+systemctl restart sota-headless
+journalctl -u sota-headless -f
 
-# Просмотр логов
-logread | grep sota
+# OpenWrt (procd):
+service sota-headless status
+service sota-headless restart
+logread -f -e sota
 
 # Проверка работоспособности
 curl http://127.0.0.1:16698/health

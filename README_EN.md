@@ -36,19 +36,27 @@ Nodes are cached for 30 minutes. Zero external dependencies, no built-in sing-bo
 
 ---
 
-## Install on OpenWrt
+## Installation
 
-Connect to your router via SSH and run:
+### Quick install (Linux / OpenWrt)
 
+The installer automatically detects the platform (Linux with `systemd` or OpenWrt with `procd`), CPU architecture, and configures the background service:
+
+**For Linux (Ubuntu / Debian / CentOS / Arch / VPS / servers):**
+```sh
+curl -fsSL https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh | sudo sh
+```
+
+**For OpenWrt (routers):**
 ```sh
 wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
 ```
 
 The installer will:
-- detect your router's CPU architecture automatically
+- detect your init system (`systemd` or `procd`) and CPU architecture
 - prompt for your Sota Access Key
-- download the binary and register the procd service
-- start the service and print your subscription URLs
+- download the binary and set up the system service
+- start the service and print your ready-to-use subscription URLs
 
 ### Supported routers
 
@@ -116,11 +124,16 @@ wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sot
 ## Useful commands
 
 ```sh
-# Service status
-service sota-headless status
+# Service management:
+# Linux (systemd):
+systemctl status sota-headless
+systemctl restart sota-headless
+journalctl -u sota-headless -f
 
-# Check logs
-logread | grep sota
+# OpenWrt (procd):
+service sota-headless status
+service sota-headless restart
+logread -f -e sota
 
 # Health check
 curl http://127.0.0.1:16698/health
