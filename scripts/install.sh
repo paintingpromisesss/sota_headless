@@ -346,9 +346,14 @@ main() {
     fi
 
     # Detect LAN IP on OpenWrt (br-lan or uci network.lan.ipaddr)
-    ROUTER_IP=$(uci get network.lan.ipaddr 2>/dev/null || ip -4 addr show br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n1)
-    [ -z "$ROUTER_IP" ] && ROUTER_IP=$(ip -4 addr show lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n1)
+    ROUTER_IP=$(uci -q get network.lan.ipaddr 2>/dev/null | head -n1)
+    [ -z "$ROUTER_IP" ] && ROUTER_IP=$(ip -4 addr show br-lan 2>/dev/null | awk '/inet /{print $2}' | head -n1)
+    [ -z "$ROUTER_IP" ] && ROUTER_IP=$(ip -4 addr show lan 2>/dev/null | awk '/inet /{print $2}' | head -n1)
     [ -z "$ROUTER_IP" ] && ROUTER_IP=$(ip route get 1 2>/dev/null | awk '{print $7; exit}')
+    # Strip CIDR netmask and extra fields if present (e.g. 192.168.0.1/24 -> 192.168.0.1)
+    ROUTER_IP="${ROUTER_IP%% *}"
+    ROUTER_IP="${ROUTER_IP%%/*}"
+    ROUTER_IP=$(echo "$ROUTER_IP" | tr -d ' \r\n')
     [ -z "$ROUTER_IP" ] && ROUTER_IP="192.168.0.1"
 
     printf "\n%b════════════════════════════════════════════%b\n" "$YEL" "$NC"
