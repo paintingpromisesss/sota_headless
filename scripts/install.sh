@@ -17,27 +17,28 @@ STATE_DIR="${CONFIG_DIR}/state"
 DEVICE_JSON="${STATE_DIR}/device.json"
 
 # ── Colors (yellow/grey on black) ─────────────────────────────────────────────
-YEL='\033[1;33m'   # bright yellow  — headers, prompts
-GRY='\033[0;37m'   # grey           — info lines
-DIM='\033[2;37m'   # dim grey       — secondary text
-RED='\033[0;31m'   # red            — errors
-GRN='\033[0;32m'   # green          — success
-NC='\033[0m'
+ESC=$(printf '\033')
+YEL="${ESC}[1;33m"   # bright yellow  — headers, prompts
+GRY="${ESC}[0;37m"   # grey           — info lines
+DIM="${ESC}[2;37m"   # dim grey       — secondary text
+RED="${ESC}[0;31m"   # red            — errors
+GRN="${ESC}[0;32m"   # green          — success
+NC="${ESC}[0m"
 
-sep()   { printf "${DIM}────────────────────────────────────────────${NC}\n"; }
-hdr()   { printf "\n${YEL}  %s${NC}\n" "$1"; sep; }
-info()  { printf "${GRY}  • %s${NC}\n" "$1"; }
-ok()    { printf "${GRN}  ✓ %s${NC}\n" "$1"; }
-warn()  { printf "${YEL}  ! %s${NC}\n" "$1"; }
-error() { printf "${RED}  ✗ %s${NC}\n" "$1"; exit 1; }
-ask()   { printf "${YEL}  → %s${NC} " "$1"; }
+sep()   { printf "%b────────────────────────────────────────────%b\n" "$DIM" "$NC"; }
+hdr()   { printf "\n%b  %s%b\n" "$YEL" "$1" "$NC"; sep; }
+info()  { printf "%b  • %s%b\n" "$GRY" "$1" "$NC"; }
+ok()    { printf "%b  ✓ %s%b\n" "$GRN" "$1" "$NC"; }
+warn()  { printf "%b  ! %s%b\n" "$YEL" "$1" "$NC"; }
+error() { printf "%b  ✗ %s%b\n" "$RED" "$1" "$NC"; exit 1; }
+ask()   { printf "%b  → %s%b " "$YEL" "$1" "$NC"; }
 
 # ── Language selection ────────────────────────────────────────────────────────
 select_language() {
-    printf "\n${YEL}════════════════════════════════════════════${NC}\n"
-    printf "${YEL}    sota-headless  ·  OpenWrt installer${NC}\n"
-    printf "${YEL}════════════════════════════════════════════${NC}\n\n"
-    printf "${GRY}  [1] English (default)\n  [2] Русский${NC}\n\n"
+    printf "\n%b════════════════════════════════════════════%b\n" "$YEL" "$NC"
+    printf "%b    sota-headless  ·  OpenWrt installer%b\n" "$YEL" "$NC"
+    printf "%b════════════════════════════════════════════%b\n\n" "$YEL" "$NC"
+    printf "%b  [1] English (default)\n  [2] Русский%b\n\n" "$GRY" "$NC"
     ask "Select language / Выберите язык [1/2]:"
     read LANG_CHOICE
 
@@ -148,12 +149,12 @@ ask_access_key() {
 
     if [ -n "$CURRENT_KEY" ]; then
         if [ "$LANG_UI" = "ru" ]; then
-            info "Текущий ключ: ${GRY}${CURRENT_KEY}${NC}"
-            printf "${DIM}  Оставьте пустым, чтобы сохранить текущий ключ, или введите новый.${NC}\n"
+            info "Текущий ключ: $CURRENT_KEY"
+            printf "%b  Оставьте пустым, чтобы сохранить текущий ключ, или введите новый.%b\n" "$DIM" "$NC"
             ask "Новый ключ (Enter чтобы оставить):"
         else
-            info "Current key: ${GRY}${CURRENT_KEY}${NC}"
-            printf "${DIM}  Leave blank to keep it, or enter a new key to replace.${NC}\n"
+            info "Current key: $CURRENT_KEY"
+            printf "%b  Leave blank to keep it, or enter a new key to replace.%b\n" "$DIM" "$NC"
             ask "New access key (Enter to keep):"
         fi
         read INPUT_KEY
@@ -350,31 +351,31 @@ main() {
     [ -z "$ROUTER_IP" ] && ROUTER_IP=$(ip route get 1 2>/dev/null | awk '{print $7; exit}')
     [ -z "$ROUTER_IP" ] && ROUTER_IP="192.168.0.1"
 
-    printf "\n${YEL}════════════════════════════════════════════${NC}\n"
+    printf "\n%b════════════════════════════════════════════%b\n" "$YEL" "$NC"
     if [ "$LANG_UI" = "ru" ]; then
-        printf "${YEL}    Готово!${NC}\n"
-        printf "${YEL}════════════════════════════════════════════${NC}\n\n"
-        printf "${GRY}  Ссылки на подписки:${NC}\n\n"
-        printf "  ${YEL}Mihomo / Zashboard${NC}\n"
-        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/mihomo${NC}\n\n"
-        printf "  ${YEL}Base64 (универсальный)${NC}\n"
-        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/base64${NC}\n\n"
-        printf "  ${YEL}Прямые ссылки vless://${NC}\n"
-        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/vless${NC}\n\n"
-        printf "${GRY}  Проверка: ${DIM}curl http://127.0.0.1:16698/health${NC}\n"
-        printf "${GRY}  Логи:     ${DIM}logread | grep sota${NC}\n\n"
+        printf "%b    Готово!%b\n" "$YEL" "$NC"
+        printf "%b════════════════════════════════════════════%b\n\n" "$YEL" "$NC"
+        printf "%b  Ссылки на подписки:%b\n\n" "$GRY" "$NC"
+        printf "  %bMihomo / Zashboard%b\n" "$YEL" "$NC"
+        printf "  %bhttp://${ROUTER_IP}:16698/sub/mihomo%b\n\n" "$DIM" "$NC"
+        printf "  %bBase64 (универсальный)%b\n" "$YEL" "$NC"
+        printf "  %bhttp://${ROUTER_IP}:16698/sub/base64%b\n\n" "$DIM" "$NC"
+        printf "  %bПрямые ссылки vless://%b\n" "$YEL" "$NC"
+        printf "  %bhttp://${ROUTER_IP}:16698/sub/vless%b\n\n" "$DIM" "$NC"
+        printf "%b  Проверка: %bcurl http://127.0.0.1:16698/health%b\n" "$GRY" "$DIM" "$NC"
+        printf "%b  Логи:     %blogread | grep sota%b\n\n" "$GRY" "$DIM" "$NC"
     else
-        printf "${YEL}    Done!${NC}\n"
-        printf "${YEL}════════════════════════════════════════════${NC}\n\n"
-        printf "${GRY}  Subscription URLs:${NC}\n\n"
-        printf "  ${YEL}Mihomo / Zashboard${NC}\n"
-        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/mihomo${NC}\n\n"
-        printf "  ${YEL}Base64 (universal)${NC}\n"
-        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/base64${NC}\n\n"
-        printf "  ${YEL}Plain vless:// links${NC}\n"
-        printf "  ${DIM}http://${ROUTER_IP}:16698/sub/vless${NC}\n\n"
-        printf "${GRY}  Health:  ${DIM}curl http://127.0.0.1:16698/health${NC}\n"
-        printf "${GRY}  Logs:    ${DIM}logread | grep sota${NC}\n\n"
+        printf "%b    Done!%b\n" "$YEL" "$NC"
+        printf "%b════════════════════════════════════════════%b\n\n" "$YEL" "$NC"
+        printf "%b  Subscription URLs:%b\n\n" "$GRY" "$NC"
+        printf "  %bMihomo / Zashboard%b\n" "$YEL" "$NC"
+        printf "  %bhttp://${ROUTER_IP}:16698/sub/mihomo%b\n\n" "$DIM" "$NC"
+        printf "  %bBase64 (universal)%b\n" "$YEL" "$NC"
+        printf "  %bhttp://${ROUTER_IP}:16698/sub/base64%b\n\n" "$DIM" "$NC"
+        printf "  %bPlain vless:// links%b\n" "$YEL" "$NC"
+        printf "  %bhttp://${ROUTER_IP}:16698/sub/vless%b\n\n" "$DIM" "$NC"
+        printf "%b  Health:  %bcurl http://127.0.0.1:16698/health%b\n" "$GRY" "$DIM" "$NC"
+        printf "%b  Logs:    %blogread | grep sota%b\n\n" "$GRY" "$DIM" "$NC"
     fi
 }
 
