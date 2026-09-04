@@ -2,96 +2,98 @@
 
 # sota-headless
 
-**Headless Sota Connect subscription provider for OpenWrt routers**
+**Сервис генерации подписок Sota Connect для роутеров OpenWrt**
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat&logo=go&logoColor=white)](https://go.dev)
 [![Release](https://img.shields.io/github/v/release/paintingpromisesss/sota_headless?style=flat&color=yellow)](https://github.com/paintingpromisesss/sota_headless/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-grey?style=flat)](LICENSE)
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-25.x-00B5E2?style=flat&logo=openwrt&logoColor=white)](https://openwrt.org)
 
-Sota Connect lock their subscriptions behind proprietary apps.  
-This tool authenticates with their API and serves the nodes as a standard subscription — directly from your router.
+[English](README_EN.md) • **Русский**
+
+Sota Connect закрывает свои подписки внутри проприетарного приложения.  
+Этот модуль авторизуется в API сервиса и отдаёт узлы в виде стандартной подписки — прямо с вашего роутера.
 
 </div>
 
 ---
 
-## How it works
+## Как это работает
 
 ```
-Your device (Happ / Mihomo / v2rayNG / ...)
+Ваше устройство (Happ / Mihomo / v2rayNG / Zashboard / ...)
         │
         │  GET http://router:16698/sub/mihomo
         ▼
-  sota-headless  (running on your router)
+  sota-headless  (фоновый сервис на роутере)
         │
         │  X-Access-Key + X-HWID → Sota API
         ▼
-   meowconnect.com  →  VLESS + Reality nodes
+   meowconnect.com  →  VLESS + Reality узлы
 ```
 
-Nodes are cached for 30 minutes. No external dependencies, no sing-box, ~8 MB binary.
+Ноды кэшируются на 30 минут. Никаких внешних зависимостей, никакого встроенного sing-box, бинарник всего ~8 МБ.
 
 ---
 
-## Install on OpenWrt
+## Установка на OpenWrt
 
-SSH into your router and run:
+Подключитесь к роутеру по SSH и выполните команду:
 
 ```sh
 wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
 ```
 
-The installer will:
-- detect your router's CPU architecture automatically
-- ask for your Sota access key
-- download the binary and set up the service
-- start everything and print your subscription URLs
+Инсталлятор сделает всё автоматически:
+- определит архитектуру процессора роутера
+- запросит ваш ключ доступа (Access Key)
+- скачает бинарник и настроит системную службу procd
+- запустит сервис и выведет ссылки на подписки
 
-### Supported routers
+### Поддерживаемые роутеры
 
-| Chip | Architecture | Example devices |
-|------|-------------|-----------------|
+| Чип / Платформа | Архитектура | Примеры устройств |
+|-----------------|-------------|-------------------|
 | MediaTek Filogic (MT7981/MT7986) | `arm64` | Netis NX31, GL.iNet MT3000 |
 | Rockchip RK3568 | `arm64` | NanoPi R5S, R5C |
 | MediaTek MT7621 | `mipsle` | Xiaomi R3G, Keenetic Giga |
 | Atheros AR9xxx | `mips` | TP-Link WR1043 |
-| x86/x64 | `amd64` | PC Engines APU |
+| x86/x64 | `amd64` | PC Engines APU, Мини-ПК |
 
 ---
 
-## Subscription URLs
+## Ссылки на подписки
 
-After install, use these in your proxy client:
+После установки укажите подходящий адрес в вашем клиенте:
 
-| Format | URL | Use with |
-|--------|-----|----------|
+| Формат | URL | Где использовать |
+|--------|-----|------------------|
 | **Mihomo YAML** | `http://router-ip:16698/sub/mihomo` | Mihomo, Zashboard, Clash.Meta |
 | **Base64** | `http://router-ip:16698/sub/base64` | Happ, v2rayNG, Shadowrocket |
-| **Plain vless://** | `http://router-ip:16698/sub/vless` | Manual import |
-| **sing-box JSON** | `http://router-ip:16698/sub/singbox` | sing-box outbounds |
+| **Обычные ссылки vless://** | `http://router-ip:16698/sub/vless` | Ручной импорт |
+| **sing-box JSON** | `http://router-ip:16698/sub/singbox` | Массив outbounds для sing-box |
 
-> Replace `router-ip` with your router's LAN address (e.g. `192.168.0.1`).
+> Замените `router-ip` на локальный IP-адрес вашего роутера (например, `192.168.0.1` или `192.168.1.1`).
 
 ---
 
-## Configuration
+## Настройка
 
-Config is stored at `/etc/sota-headless/sota-headless.env`:
+Файл конфигурации хранится по пути `/etc/sota-headless/sota-headless.env`:
 
 ```env
-SOTA_ACCESS_KEY=your-key-here
+SOTA_ACCESS_KEY=ваш-ключ-доступа
 SOTA_LISTEN=0.0.0.0:16698
 SOTA_CACHE_TTL=30m
 ```
 
-After editing, restart the service:
+После изменения конфигурации перезапустите сервис:
 
 ```sh
 service sota-headless restart
 ```
 
-To force-refresh the node cache without restarting:
+Для принудительного обновления кэша нод без перезапуска:
 
 ```sh
 curl -X POST http://127.0.0.1:16698/sub/refresh
@@ -99,9 +101,9 @@ curl -X POST http://127.0.0.1:16698/sub/refresh
 
 ---
 
-## Update
+## Обновление
 
-Re-run the same installer — it will detect the existing installation, preserve your access key and device identity, and update the binary:
+Просто запустите инсталлятор заново — он автоматически обнаружит установленную версию, сохранит ваш ключ доступа и идентификатор устройства, и обновит бинарник:
 
 ```sh
 wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
@@ -109,27 +111,27 @@ wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sot
 
 ---
 
-## Useful commands
+## Полезные команды
 
 ```sh
-# Check service status
+# Статус службы
 service sota-headless status
 
-# View logs
+# Просмотр логов
 logread | grep sota
 
-# Check health
+# Проверка работоспособности
 curl http://127.0.0.1:16698/health
 
-# View current subscription profile
+# Информация о подписке (срок, лимиты)
 curl http://127.0.0.1:16698/profile
 
-# List all available locations
+# Список доступных локаций
 curl http://127.0.0.1:16698/locations
 ```
 
 ---
 
 <div align="center">
-<sub>Not affiliated with Sota Connect. Use at your own discretion.</sub>
+<sub>Не связано с Cat Connect Oy / Sota Connect. Используйте на своё усмотрение.</sub>
 </div>
