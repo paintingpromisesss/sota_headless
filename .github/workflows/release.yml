@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: linux
+            goarch: arm
+            goarm: 7
+            suffix: linux-arm
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: mips
+            gomips: softfloat
+            suffix: linux-mips
+          - goos: linux
+            goarch: mipsle
+            gomips: softfloat
+            suffix: linux-mipsle
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          GOMIPS: ${{ matrix.gomips }}
+          CGO_ENABLED: 0
+        run: |
+          go build \
+            -ldflags="-s -w -X sota-headless/internal/config.AppVersion=${{ github.ref_name }}" \
+            -trimpath \
+            -o sota-headless-${{ matrix.suffix }} \
+            ./cmd/sota-headless
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sota-headless-${{ matrix.suffix }}
+          path: sota-headless-${{ matrix.suffix }}
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body: |
+            ## sota-headless ${{ github.ref_name }}
+
+            Headless Sota Connect subscription provider for OpenWrt / Mihomo.
+
+            ### Install on OpenWrt (one-liner)
+            ```sh
+            wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
+            ```
+
+            ### Supported architectures
+            | File | Target |
+            |------|--------|
+            | `sota-headless-linux-arm64` | MediaTek Filogic, RPi 4/5, Rockchip |
+            | `sota-headless-linux-arm` | MT7621 (ARMv7), older routers |
+            | `sota-headless-linux-amd64` | x86/x64 routers |
+            | `sota-headless-linux-mips` | Atheros AR9xxx (big-endian) |
+            | `sota-headless-linux-mipsle` | MT7620/MT7628 (little-endian) |
+
+            ### Subscription URLs after install
+            - Mihomo/Zashboard: `http://<router-ip>:16698/sub/mihomo`
+            - Base64: `http://<router-ip>:16698/sub/base64`

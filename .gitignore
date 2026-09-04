@@ -1,13 +1,27 @@
-config.json
+# Secrets and config
 .env
-.tools/
-.cache/
-.venv/
+
+# Generated state and runtime (contain secrets)
+state/
+runtime/
+rule_sets/
+
+# Build artifacts
 /sota-headless
 /sota-headless.exe
-state/*.json
-runtime/*.json
-rule_sets/*.srs
+/sota-headless-linux-*
+/sota-headless-arm64
+bin/
+
+# Logs
 *.log
+
+# Go tools
+.tools/
+.cache/
+
+# Windows
 *:Zone.Identifier
-bin
+
+# macOS
+.DS_Store

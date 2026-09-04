@@ -3,66 +3,44 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"sota-headless/internal/config"
-	runtimecfg "sota-headless/internal/runtime"
-	"sota-headless/internal/singbox"
+	"sota-headless/internal/provider"
 	"sota-headless/internal/sota"
 )
 
-var (
-	ErrSingBoxCheckFailed = errors.New("sing-box check failed")
-	ErrSingBox            = errors.New("sing-box error")
-)
-
 type Controller struct {
-	process     *exec.Cmd
-	Client      *sota.Client
-	Config      *config.Config
-	done        chan error
-	LastSnippet map[string]any
-	LastRuntime map[string]any
-	Device      sota.Device
-	StateDir    string
-	RuntimeDir  string
-	RuleSetsDir string
-	RuntimePath string
-	SingBoxLog  string
-	LastError   string
-	StartedAt   string
+	Client    *sota.Client
+	Config    *config.Config
+	Device    sota.Device
+	StateDir  string
+	LastError string
 
-	mu            sync.Mutex
-	CurrentGateID int
+	mu        sync.RWMutex
+	cachedAt  time.Time
+	cache     []provider.Node
+	cacheTTL  time.Duration
 }
 
 func New(cfg config.Config) (*Controller, error) {
-	stateDir := filepath.Join(cfg.BaseDir, "state")
+	stateDir := cfg.StateDir()
 	device, err := sota.LoadOrCreateDevice(stateDir, cfg.HWID, cfg.DeviceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load or create device: %w", err)
 	}
 	client := sota.NewClient(cfg.AccessKey, device, cfg.APIBases, cfg.UserAgent, cfg.AcceptLanguage)
-	runtimeDir := filepath.Join(cfg.BaseDir, "runtime")
 	cfgCopy := cfg
 	return &Controller{
-		Config:      &cfgCopy,
-		Client:      client,
-		Device:      device,
-		StateDir:    stateDir,
-		RuntimeDir:  runtimeDir,
-		RuleSetsDir: filepath.Join(cfg.BaseDir, "rule_sets"),
-		RuntimePath: filepath.Join(runtimeDir, "sing-box.runtime.json"),
-		SingBoxLog:  filepath.Join(runtimeDir, "sing-box.log"),
+		Config:   &cfgCopy,
+		Client:   client,
+		Device:   device,
+		StateDir: stateDir,
+		cacheTTL: cfg.CacheTTL,
 	}, nil
 }
 
@@ -82,228 +60,65 @@ func (c *Controller) Locations(ctx context.Context) ([]map[string]any, error) {
 	return locations, nil
 }
 
-func (c *Controller) Render(ctx context.Context, gate any) (string, map[string]any, map[string]any, error) {
-	locations, err := c.Locations(ctx)
-	if err != nil {
-		c.LastError = err.Error()
-		return "", nil, nil, err
+// Nodes returns all parsed nodes, using cache if still fresh.
+func (c *Controller) Nodes(ctx context.Context) ([]provider.Node, error) {
+	c.mu.RLock()
+	if len(c.cache) > 0 && time.Since(c.cachedAt) < c.cacheTTL {
+		nodes := c.cache
+		c.mu.RUnlock()
+		return nodes, nil
 	}
-	gateID, err := SelectGateID(locations, gate)
-	if err != nil {
-		c.LastError = err.Error()
-		return "", nil, nil, err
-	}
-	snippet, err := c.Client.Connect(ctx, gateID)
-	if err != nil {
-		c.LastError = err.Error()
-		return "", nil, nil, fmt.Errorf("failed to fetch connection snippet: %w", err)
-	}
-	runtime, err := runtimecfg.Build(ctx, snippet, runtimecfg.Options{
-		Mode:          c.Config.Mode,
-		RuleSetsDir:   c.RuleSetsDir,
-		UserAgent:     c.Config.UserAgent,
-		LogLevel:      c.Config.LogLevel,
-		ProxyListen:   c.Config.ProxyListen,
-		CacheRuleSets: true,
-	})
-	if err != nil {
-		c.LastError = err.Error()
-		return "", nil, nil, fmt.Errorf("failed to build runtime configuration: %w", err)
-	}
-	if err := runtimecfg.WriteJSON(c.RuntimePath, runtime); err != nil {
-		c.LastError = err.Error()
-		return "", nil, nil, fmt.Errorf("failed to write runtime configuration: %w", err)
-	}
-	c.CurrentGateID = gateID
-	c.LastSnippet = snippet
-	c.LastRuntime = runtime
-	c.LastError = ""
-	return c.RuntimePath, snippet, runtime, nil
-}
+	c.mu.RUnlock()
 
-func (c *Controller) Start(ctx context.Context, gate any) (map[string]any, error) {
-	c.mu.Lock()
-	if c.process != nil && c.process.Process != nil && c.process.ProcessState == nil {
-		_ = c.stopLocked()
-	}
-	c.mu.Unlock()
-
-	path, _, _, err := c.Render(ctx, gate)
-	if err != nil {
-		return nil, err
-	}
-	bin, err := singbox.DiscoverOrDownload(ctx, singbox.Options{
-		ExplicitBin: c.Config.SingBoxBin,
-		Dir:         c.Config.SingBoxDir,
-		Version:     c.Config.SingBoxVersion,
-		UserAgent:   c.Config.UserAgent,
-	})
-	if err != nil {
-		c.LastError = err.Error()
-		return nil, fmt.Errorf("failed to discover or download sing-box: %w", err)
-	}
-	checkOut, err := singbox.Check(ctx, bin, path)
-	if err != nil {
-		c.LastError = tail(checkOut, 2000)
-		return nil, fmt.Errorf("%w:\n%s", ErrSingBoxCheckFailed, c.LastError)
-	}
-	if err = os.MkdirAll(filepath.Dir(c.SingBoxLog), 0700); err != nil {
-		c.LastError = err.Error()
-		return nil, fmt.Errorf("failed to create log directory: %w", err)
-	}
-	logFile, err := os.OpenFile(c.SingBoxLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		c.LastError = err.Error()
-		return nil, fmt.Errorf("failed to open sing-box log file: %w", err)
-	}
-	_, err = fmt.Fprintf(logFile, "\n=== sing-box start %s ===\n", time.Now().UTC().Format(time.RFC3339))
-	if err != nil {
-		c.LastError = err.Error()
-		return nil, fmt.Errorf("failed to write to sing-box log file: %w", err)
-	}
-	_ = logFile.Close()
-
-	cmd := singbox.Command(bin, path)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		c.LastError = err.Error()
-		return nil, fmt.Errorf("failed to get stdout pipe: %w", err)
-	}
-	cmd.Stderr = cmd.Stdout
-	if err := cmd.Start(); err != nil {
-		c.LastError = err.Error()
-		return nil, fmt.Errorf("failed to start sing-box: %w", err)
-	}
-	go pumpProcessOutput(stdout, c.SingBoxLog)
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
-	}()
-	time.Sleep(time.Second)
-	select {
-	case err := <-done:
-		c.LastError = "sing-box exited immediately. Log: " + c.SingBoxLog
-		tailText := singbox.TailFile(c.SingBoxLog, 4000)
-		if tailText != "" {
-			c.LastError += "\n" + tailText
-		}
-		if err != nil {
-			c.LastError += "\n" + err.Error()
-		}
-		return nil, fmt.Errorf("%w: %s", ErrSingBox, c.LastError)
-	default:
-	}
-
-	c.mu.Lock()
-	c.process = cmd
-	c.done = done
-	c.StartedAt = time.Now().UTC().Format(time.RFC3339)
-	c.LastError = ""
-	c.mu.Unlock()
-	return map[string]any{
-		"ok":             true,
-		"pid":            cmd.Process.Pid,
-		"gate_id":        c.CurrentGateID,
-		"runtime_config": path,
-		"sing_box_log":   c.SingBoxLog,
-	}, nil
-}
-
-func (c *Controller) Stop() map[string]any {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.stopLocked()
-}
 
-func (c *Controller) stopLocked() map[string]any {
-	if c.process == nil || c.process.Process == nil {
-		c.process = nil
-		c.done = nil
-		c.StartedAt = ""
-		return map[string]any{"ok": true, "stopped": false}
+	// Double-check after acquiring write lock
+	if len(c.cache) > 0 && time.Since(c.cachedAt) < c.cacheTTL {
+		return c.cache, nil
 	}
-	if c.process.ProcessState != nil {
-		c.process = nil
-		c.done = nil
-		c.StartedAt = ""
-		return map[string]any{"ok": true, "stopped": false}
-	}
-	if err := c.process.Process.Signal(os.Interrupt); err != nil {
+
+	nodes, err := provider.FetchAllNodes(ctx, c.Client)
+	if err != nil {
 		c.LastError = err.Error()
-		return map[string]any{"ok": true, "stopped": false}
+		return nil, err
 	}
-	done := c.done
-	select {
-	case <-done:
-	case <-time.After(8 * time.Second):
-		if err := c.process.Process.Kill(); err != nil {
-			c.LastError = err.Error()
-			return map[string]any{"ok": true, "stopped": false}
-		}
-		<-done
-	}
-	c.process = nil
-	c.done = nil
-	c.StartedAt = ""
-	return map[string]any{"ok": true, "stopped": true}
+	c.cache = nodes
+	c.cachedAt = time.Now()
+	c.LastError = ""
+	return nodes, nil
 }
 
-func (c *Controller) Reload(ctx context.Context) (map[string]any, error) {
-	gate := c.CurrentGateID
-	if gate == 0 {
-		return c.Start(ctx, nil)
-	}
-	return c.Start(ctx, gate)
+// InvalidateCache forces a fresh fetch on next Nodes() call.
+func (c *Controller) InvalidateCache() {
+	c.mu.Lock()
+	c.cache = nil
+	c.cachedAt = time.Time{}
+	c.mu.Unlock()
 }
 
 func (c *Controller) Status() map[string]any {
-	c.mu.Lock()
-	running := c.process != nil && c.process.Process != nil && c.process.ProcessState == nil
-	pid := any(nil)
-	if running {
-		pid = c.process.Process.Pid
+	c.mu.RLock()
+	cacheAge := ""
+	cacheCount := 0
+	if !c.cachedAt.IsZero() {
+		cacheAge = time.Since(c.cachedAt).Round(time.Second).String()
+		cacheCount = len(c.cache)
 	}
-	c.mu.Unlock()
-	state := "disconnected"
-	if running {
-		state = "connected"
-	}
+	c.mu.RUnlock()
+
 	return map[string]any{
-		"version":             config.AppVersion,
-		"mode":                c.Config.Mode,
-		"running":             running,
-		"pid":                 pid,
-		"connectionStartDate": c.StartedAt,
-		"connectionState":     state,
-		"gate_id":             nullIfZero(c.CurrentGateID),
-		"runtime_config":      nullIfEmpty(c.RuntimePath),
-		"sing_box_log":        c.SingBoxLog,
-		"api_base":            nullIfEmpty(c.Client.ActiveBase),
-		"last_error":          c.LastError,
+		"version":     config.AppVersion,
+		"cache_nodes": cacheCount,
+		"cache_age":   cacheAge,
+		"cache_ttl":   c.cacheTTL.String(),
+		"api_base":    nullIfEmpty(c.Client.ActiveBase),
+		"last_error":  c.LastError,
 		"device": map[string]any{
 			"x_device_name": c.Device.DeviceName,
 			"x_hwid":        RedactValue(c.Device.HWID),
 		},
 	}
-}
-
-func (c *Controller) RuntimeConfig(raw bool) (map[string]any, error) {
-	var data map[string]any
-	if c.LastRuntime != nil {
-		data = c.LastRuntime
-	} else if _, err := os.Stat(c.RuntimePath); err == nil {
-		read, err := runtimecfg.ReadJSON(c.RuntimePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read runtime configuration: %w", err)
-		}
-		data = read
-	} else {
-		data = map[string]any{}
-	}
-	if raw {
-		return data, nil
-	}
-	return Redact(data).(map[string]any), nil
 }
 
 func SelectGateID(locations []map[string]any, requested any) (int, error) {
@@ -391,28 +206,6 @@ func MarshalJSON(value any) ([]byte, error) {
 	return json.MarshalIndent(value, "", "  ")
 }
 
-func pumpProcessOutput(pipe io.ReadCloser, logPath string) {
-	defer pipe.Close()
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "[sing-box-log-pump-error] %v\n", err)
-		return
-	}
-	defer logFile.Close()
-	buf := make([]byte, 4096)
-	for {
-		n, err := pipe.Read(buf)
-		if n > 0 {
-			chunk := buf[:n]
-			_, _ = logFile.Write(chunk)
-			_, _ = fmt.Fprint(os.Stderr, "[sing-box] "+string(chunk))
-		}
-		if err != nil {
-			return
-		}
-	}
-}
-
 func stringField(item map[string]any, key string) string {
 	if v, ok := item[key].(string); ok {
 		return v
@@ -443,18 +236,4 @@ func nullIfEmpty(s string) any {
 		return nil
 	}
 	return s
-}
-
-func nullIfZero(i int) any {
-	if i == 0 {
-		return nil
-	}
-	return i
-}
-
-func tail(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[len(s)-n:]
 }

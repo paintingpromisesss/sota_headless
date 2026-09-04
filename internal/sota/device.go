@@ -46,6 +46,10 @@ func LoadOrCreateDevice(stateDir, envHWID, envDeviceName string) (Device, error)
 		if jsonErr := writeJSONAtomic(path, device); jsonErr != nil {
 			return Device{}, fmt.Errorf("failed to write device.json: %w", jsonErr)
 		}
+		data, err = os.ReadFile(path)
+		if err != nil {
+			return Device{}, fmt.Errorf("failed to reread device.json: %w", err)
+		}
 	} else if err != nil {
 		return Device{}, fmt.Errorf("failed to read device.json: %w", err)
 	}

@@ -4,17 +4,18 @@ import (
 	"os"
 	"sota-headless/internal/config"
 	"testing"
+	"time"
 )
 
 func TestLoadFromEnvironment(t *testing.T) {
 	unsetEnv(t, "SOTA_ACCESS_KEY")
 	unsetEnv(t, "SOTA_API_ENABLED")
-	unsetEnv(t, "SOTA_MODE")
 	unsetEnv(t, "SOTA_API_BASES")
+	unsetEnv(t, "SOTA_CACHE_TTL")
 	t.Setenv("SOTA_ACCESS_KEY", "abc")
 	t.Setenv("SOTA_API_ENABLED", "yes")
-	t.Setenv("SOTA_MODE", "Proxy")
 	t.Setenv("SOTA_API_BASES", "https://a/api/v1, https://b/api/v1")
+	t.Setenv("SOTA_CACHE_TTL", "10m")
 	dir := t.TempDir()
 	cfg, err := config.Load(dir)
 	if err != nil {
@@ -26,11 +27,11 @@ func TestLoadFromEnvironment(t *testing.T) {
 	if !cfg.APIEnabled {
 		t.Fatal("expected APIEnabled=true")
 	}
-	if cfg.Mode != config.ModeProxy {
-		t.Fatalf("mode = %q", cfg.Mode)
-	}
 	if len(cfg.APIBases) != 2 {
 		t.Fatalf("api bases = %#v", cfg.APIBases)
+	}
+	if cfg.CacheTTL != 10*time.Minute {
+		t.Fatalf("cache TTL = %v", cfg.CacheTTL)
 	}
 }
 
@@ -42,7 +43,7 @@ func TestLoadRequiresAccessKey(t *testing.T) {
 	}
 }
 
-func TestAPIDisabledByDefault(t *testing.T) {
+func TestAPIEnabledByDefault(t *testing.T) {
 	unsetEnv(t, "SOTA_ACCESS_KEY")
 	unsetEnv(t, "SOTA_API_ENABLED")
 	t.Setenv("SOTA_ACCESS_KEY", "abc")
@@ -50,8 +51,8 @@ func TestAPIDisabledByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.APIEnabled {
-		t.Fatal("expected APIEnabled=false by default")
+	if !cfg.APIEnabled {
+		t.Fatal("expected APIEnabled=true by default")
 	}
 }
 
@@ -85,6 +86,19 @@ func TestLoadListenSupportsLegacySOTAServerListen(t *testing.T) {
 	}
 	if cfg.Listen != "127.0.0.1:1111" {
 		t.Fatalf("listen = %q", cfg.Listen)
+	}
+}
+
+func TestStateDirIsSubdirOfBaseDir(t *testing.T) {
+	unsetEnv(t, "SOTA_ACCESS_KEY")
+	t.Setenv("SOTA_ACCESS_KEY", "abc")
+	dir := t.TempDir()
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.StateDir() == "" {
+		t.Fatal("StateDir() is empty")
 	}
 }
 

@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
-	"time"
 
 	"sota-headless/internal/config"
 	"sota-headless/internal/controller"
+	"sota-headless/internal/provider"
 	"sota-headless/internal/server"
 )
 
@@ -20,36 +21,36 @@ func main() {
 }
 
 func run() int {
+	// Limit memory usage — important on routers with ≤256MB RAM
+	debug.SetMemoryLimit(48 << 20) // 48 MiB
+
 	var (
-		listen    string
-		gateID    string
-		profile   bool
-		locations bool
-		render    bool
-		connect   bool
-		raw       bool
+		listen  string
+		profile bool
+		locs    bool
+		nodes   bool
+		vless   bool
+		base64  bool
+		mihomo  bool
 	)
-	flag.StringVar(&listen, "listen", "", "HTTP listen address, default SOTA_LISTEN or 127.0.0.1:16698")
-	flag.BoolVar(&profile, "profile", false, "Fetch profile and exit")
-	flag.BoolVar(&locations, "locations", false, "Fetch locations and exit")
-	flag.BoolVar(&render, "render", false, "Fetch selected config, render runtime JSON and exit")
-	flag.BoolVar(&connect, "connect", false, "Render and start sing-box, then keep running")
-	flag.StringVar(&gateID, "gate-id", "", "Gate id or shortname, default: SOTA_GATE_ID or BST/best")
-	flag.BoolVar(&raw, "raw", false, "Print unredacted JSON for local debugging")
+
+	flag.StringVar(&listen, "listen", "", "HTTP listen address (default SOTA_LISTEN or 0.0.0.0:16698)")
+	flag.BoolVar(&profile, "profile", false, "Fetch subscription profile and exit")
+	flag.BoolVar(&locs, "locations", false, "Fetch server locations list and exit")
+	flag.BoolVar(&nodes, "nodes", false, "Fetch all nodes with connection params and exit (JSON)")
+	flag.BoolVar(&vless, "vless", false, "Print vless:// links for all nodes and exit")
+	flag.BoolVar(&base64, "base64", false, "Print base64-encoded subscription and exit")
+	flag.BoolVar(&mihomo, "mihomo", false, "Print Mihomo YAML proxy-provider and exit")
 	flag.Parse()
 
 	cfg, err := config.Load("")
 	if err != nil {
 		return fail(err)
 	}
-	flag.Visit(func(f *flag.Flag) {
-		switch f.Name {
-		case "listen":
-			cfg.Listen = listen
-		case "gate-id":
-			cfg.GateID = gateID
-		}
-	})
+	if listen != "" {
+		cfg.Listen = listen
+	}
+
 	ctrl, err := controller.New(cfg)
 	if err != nil {
 		return fail(err)
@@ -57,48 +58,56 @@ func run() int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	defer ctrl.Stop()
 
 	switch {
 	case profile:
 		result, err := ctrl.Profile(ctx)
-		return printResult(result, err, true)
-	case locations:
+		return printJSON(result, err)
+
+	case locs:
 		result, err := ctrl.Locations(ctx)
-		return printResult(result, err, true)
-	case render:
-		path, snippet, runtime, err := ctrl.Render(ctx, cfg.GateID)
-		result := map[string]any{"runtime_config": path, "gate_id": ctrl.CurrentGateID, "snippet": snippet, "config": runtime}
-		return printResult(result, err, raw)
-	case connect:
-		result, err := ctrl.Start(ctx, cfg.GateID)
-		if code := printResult(result, err, true); code != 0 {
-			return code
+		return printJSON(result, err)
+
+	case nodes:
+		result, err := ctrl.Nodes(ctx)
+		return printJSON(result, err)
+
+	case vless:
+		result, err := ctrl.Nodes(ctx)
+		if err != nil {
+			return fail(err)
 		}
-		<-ctx.Done()
+		fmt.Print(provider.ToVlessLines(result))
 		return 0
-	case cfg.APIEnabled:
+
+	case base64:
+		result, err := ctrl.Nodes(ctx)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Println(provider.ToBase64(result))
+		return 0
+
+	case mihomo:
+		result, err := ctrl.Nodes(ctx)
+		if err != nil {
+			return fail(err)
+		}
+		_, _ = os.Stdout.Write(provider.ToMihomoYAML(result))
+		return 0
+
+	default:
+		// Default mode: run HTTP subscription server
 		if err := server.ListenAndServe(ctx, ctrl, cfg.Listen); err != nil {
 			return fail(err)
 		}
-		time.Sleep(100 * time.Millisecond)
-		return 0
-	default:
-		result, err := ctrl.Start(ctx, cfg.GateID)
-		if code := printResult(result, err, true); code != 0 {
-			return code
-		}
-		<-ctx.Done()
 		return 0
 	}
 }
 
-func printResult(value any, err error, unredacted bool) int {
+func printJSON(value any, err error) int {
 	if err != nil {
 		return fail(err)
-	}
-	if !unredacted {
-		value = controller.Redact(value)
 	}
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
@@ -109,6 +118,6 @@ func printResult(value any, err error, unredacted bool) int {
 }
 
 func fail(err error) int {
-	fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+	_, _ = fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 	return 1
 }

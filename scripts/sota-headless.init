@@ -1,0 +1,57 @@
+#!/bin/sh /etc/rc.common
+# sota-headless OpenWrt procd init script
+# Install to: /etc/init.d/sota-headless
+# Enable: service sota-headless enable && service sota-headless start
+
+START=99
+STOP=10
+USE_PROCD=1
+
+PROG=/usr/bin/sota-headless
+CONFIG_FILE=/etc/sota-headless.env
+PIDFILE=/var/run/sota-headless.pid
+
+start_service() {
+    # Load config file if present
+    if [ -f "$CONFIG_FILE" ]; then
+        export $(grep -v '^#' "$CONFIG_FILE" | grep -v '^$' | xargs)
+    fi
+
+    # Ensure data directory exists
+    mkdir -p /etc/sota-headless/state
+
+    procd_open_instance
+    procd_set_param command "$PROG"
+    procd_set_param pidfile "$PIDFILE"
+
+    # Working directory — device.json and state will be stored here
+    procd_set_param chdir /etc/sota-headless
+
+    # Env vars — override here or set in $CONFIG_FILE
+    procd_set_param env \
+        SOTA_ACCESS_KEY="${SOTA_ACCESS_KEY:-}" \
+        SOTA_BASE_DIR="/etc/sota-headless" \
+        SOTA_LISTEN="${SOTA_LISTEN:-0.0.0.0:16698}" \
+        SOTA_API_ENABLED="true" \
+        SOTA_CACHE_TTL="${SOTA_CACHE_TTL:-30m}" \
+        SOTA_API_BASES="${SOTA_API_BASES:-https://meowconnect.com/api/v1,https://sota.ac/api/v1}" \
+        SOTA_USER_AGENT="${SOTA_USER_AGENT:-Sota Connect (v1.7.7/windows)}" \
+        SOTA_ACCEPT_LANGUAGE="${SOTA_ACCEPT_LANGUAGE:-ru}" \
+        GOMEMLIMIT="36MiB"
+
+    # Auto-restart on crash, 10s delay
+    procd_set_param respawn 3600 10 0
+
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_close_instance
+}
+
+stop_service() {
+    procd_kill sota-headless
+}
+
+reload_service() {
+    stop_service
+    start_service
+}
