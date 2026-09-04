@@ -216,7 +216,11 @@ main() {
         info "Check: logread | grep sota"
     fi
 
-    ROUTER_IP=$(ip route get 1 2>/dev/null | awk '{print $7; exit}' || echo "192.168.0.1")
+    # Detect LAN IP on OpenWrt (br-lan or uci network.lan.ipaddr)
+    ROUTER_IP=$(uci get network.lan.ipaddr 2>/dev/null || ip -4 addr show br-lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n1)
+    [ -z "$ROUTER_IP" ] && ROUTER_IP=$(ip -4 addr show lan 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n1)
+    [ -z "$ROUTER_IP" ] && ROUTER_IP=$(ip route get 1 2>/dev/null | awk '{print $7; exit}')
+    [ -z "$ROUTER_IP" ] && ROUTER_IP="192.168.0.1"
 
     printf "\n${YEL}════════════════════════════════════════════${NC}\n"
     printf "${YEL}    Done!${NC}\n"
