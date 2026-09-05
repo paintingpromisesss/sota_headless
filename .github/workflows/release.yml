@@ -33,6 +33,12 @@ jobs:
             goarch: mipsle
             gomips: softfloat
             suffix: linux-mipsle
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64.exe
+          - goos: windows
+            goarch: arm64
+            suffix: windows-arm64.exe
 
     steps:
       - uses: actions/checkout@v4
@@ -94,3 +100,5 @@ jobs:
             | `sota-headless-linux-amd64` | x86/x64 routers |
             | `sota-headless-linux-mips` | Atheros AR9xxx (big-endian) |
             | `sota-headless-linux-mipsle` | MT7620/MT7628 (little-endian) |
+            | `sota-headless-windows-amd64.exe` | Windows x86_64 / x64 |
+            | `sota-headless-windows-arm64.exe` | Windows ARM64 |

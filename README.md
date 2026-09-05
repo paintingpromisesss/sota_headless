@@ -38,9 +38,12 @@ Sota Connect закрывает свои подписки внутри проп�
 
 ## Установка
 
-### Быстрая установка (Linux / OpenWrt)
+### Быстрая установка
 
-Инсталлятор автоматически определяет систему (Linux с `systemd` или OpenWrt с `procd`), архитектуру процессора и настраивает фоновую службу:
+**Для Windows (PowerShell от имени Администратора):**
+```powershell
+irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.ps1 | iex
+```
 
 **Для Linux (Ubuntu / Debian / CentOS / Arch / VPS / серверы):**
 ```sh
@@ -53,9 +56,9 @@ wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sot
 ```
 
 Инсталлятор сделает всё автоматически:
-- определит систему инициализации (`systemd` или `procd`) и архитектуру процессора
+- определит платформу (Windows, Linux с `systemd` или OpenWrt с `procd`) и архитектуру процессора
 - запросит ваш ключ доступа (Access Key)
-- скачает бинарник и настроит системную службу
+- скачает бинарник и настроит системную службу (на Windows — нативную службу Windows и правило брандмауэра)
 - запустит фоновый сервис и выведет ссылки на подписки
 
 ### Поддерживаемые роутеры
@@ -86,8 +89,10 @@ wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sot
 ---
 
 ## Настройка
-
-Файл конфигурации хранится по пути `/etc/sota-headless/sota-headless.env`:
+ 
+Файл конфигурации хранится по пути:
+- **Windows**: `C:\Program Files\sota-headless\sota-headless.env`
+- **Linux / OpenWrt**: `/etc/sota-headless/sota-headless.env`
 
 ```env
 SOTA_ACCESS_KEY=ваш-ключ-доступа
@@ -99,9 +104,9 @@ SOTA_LOG_LEVEL=info
 
 После изменения конфигурации перезапустите сервис:
 
-```sh
-service sota-headless restart
-```
+- **Windows (PowerShell)**: `Restart-Service sota-headless`
+- **Linux**: `systemctl restart sota-headless`
+- **OpenWrt**: `service sota-headless restart`
 
 Для принудительного обновления кэша нод без перезапуска:
 
@@ -113,11 +118,7 @@ curl -X POST http://127.0.0.1:16698/sub/refresh
 
 ## Обновление
 
-Просто запустите инсталлятор заново — он автоматически обнаружит установленную версию, сохранит ваш ключ доступа и идентификатор устройства, и обновит бинарник:
-
-```sh
-wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
-```
+Просто запустите инсталлятор заново — он автоматически обнаружит установленную версию, сохранит ваш ключ доступа и идентификатор устройства, и обновит бинарник.
 
 ---
 
@@ -125,6 +126,11 @@ wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sot
 
 ```sh
 # Управление службой:
+# Windows (PowerShell от имени Администратора):
+Get-Service sota-headless
+Restart-Service sota-headless
+Stop-Service sota-headless
+
 # Linux (systemd):
 systemctl status sota-headless
 systemctl restart sota-headless

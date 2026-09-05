@@ -38,9 +38,12 @@ Nodes are cached for 30 minutes. Zero external dependencies, no built-in sing-bo
 
 ## Installation
 
-### Quick install (Linux / OpenWrt)
-
-The installer automatically detects the platform (Linux with `systemd` or OpenWrt with `procd`), CPU architecture, and configures the background service:
+### Quick install
+ 
+**For Windows (PowerShell as Administrator):**
+```powershell
+irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.ps1 | iex
+```
 
 **For Linux (Ubuntu / Debian / CentOS / Arch / VPS / servers):**
 ```sh
@@ -53,9 +56,9 @@ wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sot
 ```
 
 The installer will:
-- detect your init system (`systemd` or `procd`) and CPU architecture
+- detect your platform (Windows, Linux with `systemd`, or OpenWrt with `procd`) and CPU architecture
 - prompt for your Sota Access Key
-- download the binary and set up the system service
+- download the binary and set up the system service (on Windows: native Windows service and firewall rule)
 - start the service and print your ready-to-use subscription URLs
 
 ### Supported routers
@@ -86,8 +89,10 @@ After installation, use the corresponding URL in your proxy client:
 ---
 
 ## Configuration
-
-The configuration file is stored at `/etc/sota-headless/sota-headless.env`:
+ 
+The configuration file is stored at:
+- **Windows**: `C:\Program Files\sota-headless\sota-headless.env`
+- **Linux / OpenWrt**: `/etc/sota-headless/sota-headless.env`
 
 ```env
 SOTA_ACCESS_KEY=your-access-key-here
@@ -99,9 +104,9 @@ SOTA_LOG_LEVEL=info
 
 Restart the service after making changes:
 
-```sh
-service sota-headless restart
-```
+- **Windows (PowerShell)**: `Restart-Service sota-headless`
+- **Linux**: `systemctl restart sota-headless`
+- **OpenWrt**: `service sota-headless restart`
 
 To force-refresh the node cache without restarting:
 
@@ -113,11 +118,7 @@ curl -X POST http://127.0.0.1:16698/sub/refresh
 
 ## Update
 
-Simply re-run the installer — it will detect the existing setup, preserve your access key and device identity, and update the binary:
-
-```sh
-wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
-```
+Simply re-run the installer — it will detect the existing setup, preserve your access key and device identity, and update the binary.
 
 ---
 
@@ -125,6 +126,11 @@ wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sot
 
 ```sh
 # Service management:
+# Windows (PowerShell as Administrator):
+Get-Service sota-headless
+Restart-Service sota-headless
+Stop-Service sota-headless
+
 # Linux (systemd):
 systemctl status sota-headless
 systemctl restart sota-headless

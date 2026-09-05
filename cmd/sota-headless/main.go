@@ -28,6 +28,7 @@ func run() int {
 
 	var (
 		listen    string
+		baseDir   string
 		logLevel  string
 		logFormat string
 		profile   bool
@@ -38,6 +39,7 @@ func run() int {
 		mihomo    bool
 	)
 
+	flag.StringVar(&baseDir, "base-dir", "", "Base directory for config and state (default SOTA_BASE_DIR or executable directory)")
 	flag.StringVar(&listen, "listen", "", "HTTP listen address (default SOTA_LISTEN or 0.0.0.0:16698)")
 	flag.StringVar(&logLevel, "log-level", "", "Log level: debug, info, warn, error (default SOTA_LOG_LEVEL or info)")
 	flag.StringVar(&logFormat, "log-format", "", "Log format: text, json (default SOTA_LOG_FORMAT or text)")
@@ -51,7 +53,7 @@ func run() int {
 
 	isCLICommand := profile || locs || nodes || vless || base64 || mihomo
 
-	cfg, err := config.Load("")
+	cfg, err := config.Load(baseDir)
 	if err != nil {
 		logger.Setup("info", "text", os.Stderr)
 		return fail(err)
@@ -116,6 +118,16 @@ func run() int {
 		return 0
 
 	default:
+		// When running as a Windows service under Service Control Manager
+		if isSvc, svcErr := runWindowsService(func(svcCtx context.Context) error {
+			return server.ListenAndServe(svcCtx, ctrl, cfg.Listen)
+		}); isSvc {
+			if svcErr != nil {
+				return fail(svcErr)
+			}
+			return 0
+		}
+
 		// Default mode: run HTTP subscription server
 		if err := server.ListenAndServe(ctx, ctrl, cfg.Listen); err != nil {
 			return fail(err)

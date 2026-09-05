@@ -111,6 +111,30 @@ func TestStateDirIsSubdirOfBaseDir(t *testing.T) {
 	}
 }
 
+func TestLoadFromEnvFile(t *testing.T) {
+	unsetEnv(t, "SOTA_ACCESS_KEY")
+	unsetEnv(t, "SOTA_LISTEN")
+	unsetEnv(t, "SOTA_CACHE_TTL")
+	dir := t.TempDir()
+	envContent := "# comment\nSOTA_ACCESS_KEY=file-key\nSOTA_LISTEN=127.0.0.1:23456\nSOTA_CACHE_TTL=15m\n"
+	if err := os.WriteFile(dir+"/sota-headless.env", []byte(envContent), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AccessKey != "file-key" {
+		t.Fatalf("expected access key 'file-key', got %q", cfg.AccessKey)
+	}
+	if cfg.Listen != "127.0.0.1:23456" {
+		t.Fatalf("expected listen '127.0.0.1:23456', got %q", cfg.Listen)
+	}
+	if cfg.CacheTTL != 15*time.Minute {
+		t.Fatalf("expected cache TTL 15m, got %v", cfg.CacheTTL)
+	}
+}
+
 func unsetEnv(t *testing.T, key string) {
 	t.Helper()
 	old, ok := os.LookupEnv(key)
