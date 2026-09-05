@@ -39,9 +39,9 @@ The service does not route user traffic. It queries node parameters via API, for
 
 ### Standard installation
 
-**Windows (PowerShell as Administrator):**
-```powershell
-irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.ps1 | iex
+**OpenWrt (routers):**
+```sh
+wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
 ```
 
 **Linux (Ubuntu, Debian, CentOS, Arch, servers):**
@@ -49,14 +49,14 @@ irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scri
 curl -fsSL https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh | sudo sh
 ```
 
-**OpenWrt (routers):**
-```sh
-wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
+**Windows (PowerShell as Administrator):**
+```powershell
+irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.ps1 | iex
 ```
 
-### UPX build (for memory-constrained devices)
+### UPX build
 
-For routers with limited storage space, a UPX-compressed build is available:
+For devices with limited storage space, a UPX-compressed build is available:
 
 **OpenWrt:**
 ```sh
@@ -85,8 +85,7 @@ $env:SOTA_UPX=1; irm https://raw.githubusercontent.com/paintingpromisesss/sota_h
 
 | Platform / SoC | Architecture | Example devices |
 |----------------|--------------|-----------------|
-| MediaTek Filogic (MT7981/MT7986) | `arm64` | Netis NX31, GL.iNet MT3000 |
-| Rockchip RK3568 | `arm64` | NanoPi R5S, R5C |
+| MediaTek Filogic, Rockchip RK35xx | `arm64` | Netis NX31, GL.iNet MT3000, NanoPi R5S |
 | MediaTek MT7621 | `mipsle` | Xiaomi R3G, Keenetic Giga |
 | Atheros AR9xxx | `mips` | TP-Link WR1043 |
 | x86-64 | `amd64` | PC Engines APU, x86 routers, mini PCs |
@@ -111,8 +110,9 @@ Once the service is running, enter the appropriate URL into your client configur
 ## Configuration
 
 Settings are defined in the environment configuration file:
+- **OpenWrt**: `/etc/sota-headless/sota-headless.env`
+- **Linux**: `/etc/sota-headless/sota-headless.env`
 - **Windows**: `C:\Program Files\sota-headless\sota-headless.env`
-- **Linux / OpenWrt**: `/etc/sota-headless/sota-headless.env`
 
 ```env
 SOTA_ACCESS_KEY=your-access-key-here
@@ -124,9 +124,9 @@ SOTA_LOG_LEVEL=info
 
 Restart the service to apply changes:
 
-- **Windows (PowerShell)**: `Restart-Service sota-headless`
-- **Linux**: `systemctl restart sota-headless`
 - **OpenWrt**: `service sota-headless restart`
+- **Linux**: `systemctl restart sota-headless`
+- **Windows (PowerShell)**: `Restart-Service sota-headless`
 
 To force a cache refresh without restarting:
 
@@ -146,20 +146,20 @@ To update, rerun the installation command. The script will replace the executabl
 
 ```sh
 # Service management:
-# Windows (PowerShell):
-Get-Service sota-headless
-Restart-Service sota-headless
-Stop-Service sota-headless
+# OpenWrt (procd):
+service sota-headless status
+service sota-headless restart
+logread -f -e sota
 
 # Linux (systemd):
 systemctl status sota-headless
 systemctl restart sota-headless
 journalctl -u sota-headless -f
 
-# OpenWrt (procd):
-service sota-headless status
-service sota-headless restart
-logread -f -e sota
+# Windows (PowerShell):
+Get-Service sota-headless
+Restart-Service sota-headless
+Stop-Service sota-headless
 
 # Health check:
 curl http://127.0.0.1:16698/health

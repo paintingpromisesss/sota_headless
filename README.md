@@ -39,9 +39,9 @@
 
 ### Стандартная установка
 
-**Windows (PowerShell от имени администратора):**
-```powershell
-irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.ps1 | iex
+**OpenWrt (роутеры):**
+```sh
+wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
 ```
 
 **Linux (Ubuntu, Debian, CentOS, Arch, серверы):**
@@ -49,14 +49,14 @@ irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scri
 curl -fsSL https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh | sudo sh
 ```
 
-**OpenWrt (роутеры):**
-```sh
-wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
+**Windows (PowerShell от имени администратора):**
+```powershell
+irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.ps1 | iex
 ```
 
-### Сборка с UPX (для устройств с ограниченной флеш-памятью)
+### Сборка с UPX
 
-Для роутеров с малым объемом системной памяти доступна сборка, сжатая UPX:
+Для устройств с малым объемом системной памяти доступна сборка, сжатая UPX:
 
 **OpenWrt:**
 ```sh
@@ -81,12 +81,11 @@ $env:SOTA_UPX=1; irm https://raw.githubusercontent.com/paintingpromisesss/sota_h
 > | Потребление RAM (RSS) | ~10–14 МБ | ~16–22 МБ | Дополнительные ~5–7 МБ RAM при работе |
 > | Время запуска | ~5 мс | ~30–60 мс | Время на распаковку исполняемого файла в память |
 
-### Поддерживаемые платформы роутеров
+### Поддерживаемые платформы
 
 | Платформа / SoC | Архитектура | Примеры устройств |
 |-----------------|-------------|-------------------|
-| MediaTek Filogic (MT7981/MT7986) | `arm64` | Netis NX31, GL.iNet MT3000 |
-| Rockchip RK3568 | `arm64` | NanoPi R5S, R5C |
+| MediaTek Filogic, Rockchip RK35xx | `arm64` | Netis NX31, GL.iNet MT3000, NanoPi R5S |
 | MediaTek MT7621 | `mipsle` | Xiaomi R3G, Keenetic Giga |
 | Atheros AR9xxx | `mips` | TP-Link WR1043 |
 | x86-64 | `amd64` | PC Engines APU, x86-роутеры, мини-ПК |
@@ -111,8 +110,9 @@ $env:SOTA_UPX=1; irm https://raw.githubusercontent.com/paintingpromisesss/sota_h
 ## Конфигурация
 
 Параметры задаются в файле конфигурации:
+- **OpenWrt**: `/etc/sota-headless/sota-headless.env`
+- **Linux**: `/etc/sota-headless/sota-headless.env`
 - **Windows**: `C:\Program Files\sota-headless\sota-headless.env`
-- **Linux / OpenWrt**: `/etc/sota-headless/sota-headless.env`
 
 ```env
 SOTA_ACCESS_KEY=ваш-ключ-доступа
@@ -124,9 +124,9 @@ SOTA_LOG_LEVEL=info
 
 Применение изменений конфигурации требует перезапуска службы:
 
-- **Windows (PowerShell)**: `Restart-Service sota-headless`
-- **Linux**: `systemctl restart sota-headless`
 - **OpenWrt**: `service sota-headless restart`
+- **Linux**: `systemctl restart sota-headless`
+- **Windows (PowerShell)**: `Restart-Service sota-headless`
 
 Принудительное обновление кэша без перезапуска:
 
@@ -146,20 +146,20 @@ curl -X POST http://127.0.0.1:16698/sub/refresh
 
 ```sh
 # Состояние и управление службой:
-# Windows (PowerShell):
-Get-Service sota-headless
-Restart-Service sota-headless
-Stop-Service sota-headless
+# OpenWrt (procd):
+service sota-headless status
+service sota-headless restart
+logread -f -e sota
 
 # Linux (systemd):
 systemctl status sota-headless
 systemctl restart sota-headless
 journalctl -u sota-headless -f
 
-# OpenWrt (procd):
-service sota-headless status
-service sota-headless restart
-logread -f -e sota
+# Windows (PowerShell):
+Get-Service sota-headless
+Restart-Service sota-headless
+Stop-Service sota-headless
 
 # Проверка доступности сервиса:
 curl http://127.0.0.1:16698/health
