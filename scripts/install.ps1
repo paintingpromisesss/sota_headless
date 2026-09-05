@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     sota-headless installer & service manager for Windows.
@@ -181,6 +181,10 @@ Assert-Administrator
 
 if ($Uninstall) {
     Invoke-UninstallRoutine
+}
+
+if ($env:SOTA_VERSION -and $Version -eq "latest") {
+    $Version = $env:SOTA_VERSION
 }
 
 $targetBinary = Get-Architecture
