@@ -344,6 +344,9 @@ main() {
     check_deps
     detect_init
     ARCH=$(detect_arch)
+    if [ "$SOTA_UPX" = "1" ] || [ "$SOTA_UPX" = "true" ]; then
+        ARCH="${ARCH}-upx"
+    fi
     if [ "$LANG_UI" = "ru" ]; then
         info "Архитектура: $ARCH (система: $INIT_SYSTEM, версия: $INSTALL_VERSION)"
     else

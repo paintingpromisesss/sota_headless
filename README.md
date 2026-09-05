@@ -61,6 +61,33 @@ wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sot
 - скачает бинарник и настроит системную службу (на Windows — нативную службу Windows и правило брандмауэра)
 - запустит фоновый сервис и выведет ссылки на подписки
 
+### Легковесная версия (UPX) для роутеров с малым объёмом Flash (16–32 МБ)
+
+Если на вашем роутере ограничено место во флеш-памяти, доступна сжатая UPX-версия:
+
+**Для OpenWrt (роутеры):**
+```sh
+wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && SOTA_UPX=1 sh /tmp/install.sh
+```
+
+**Для Linux:**
+```sh
+curl -fsSL https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh | sudo SOTA_UPX=1 sh
+```
+
+**Для Windows (PowerShell):**
+```powershell
+$env:SOTA_UPX=1; irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.ps1 | iex
+```
+
+> #### ⚖️ Сравнение версий:
+>
+> | Параметр | Стандартная версия | Сжатая UPX-версия | Разница |
+> |---|---|---|---|
+> | **Размер на диске / Flash** | ~6.0 – 6.7 МБ | **~1.7 – 2.0 МБ** | **Экономия ~70–75% Flash** |
+> | **Потребление RAM (RSS)** | **~10 – 14 МБ** | ~16 – 22 МБ | **Оверхед: +5–7 МБ RAM** |
+> | **Время холодного старта** | ~5 мс | ~30–60 мс | +30–50 мс на распаковку при старте |
+
 ### Поддерживаемые роутеры
 
 | Чип / Платформа | Архитектура | Примеры устройств |

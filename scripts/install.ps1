@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     sota-headless installer & service manager for Windows.
@@ -31,6 +31,7 @@ param(
     [string]$InstallDir = "$env:ProgramFiles\sota-headless",
     [string]$Listen = "0.0.0.0:16698",
     [string]$Lang = "",
+    [switch]$Upx,
     [switch]$Uninstall
 )
 
@@ -183,6 +184,9 @@ if ($Uninstall) {
 }
 
 $targetBinary = Get-Architecture
+if ($Upx -or $env:SOTA_UPX -eq "1" -or $env:SOTA_UPX -eq "true") {
+    $targetBinary = $targetBinary -replace '\.exe$', '-upx.exe'
+}
 $isUpgrade = $false
 $configFile = Join-Path $InstallDir "sota-headless.env"
 $stateDir = Join-Path $InstallDir "state"

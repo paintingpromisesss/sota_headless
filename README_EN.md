@@ -61,6 +61,33 @@ The installer will:
 - download the binary and set up the system service (on Windows: native Windows service and firewall rule)
 - start the service and print your ready-to-use subscription URLs
 
+### Lightweight UPX version for Flash-constrained routers (16–32 MB)
+
+If your router has limited flash memory, a UPX-compressed variant is available:
+
+**For OpenWrt (routers):**
+```sh
+wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && SOTA_UPX=1 sh /tmp/install.sh
+```
+
+**For Linux:**
+```sh
+curl -fsSL https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh | sudo SOTA_UPX=1 sh
+```
+
+**For Windows (PowerShell):**
+```powershell
+$env:SOTA_UPX=1; irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.ps1 | iex
+```
+
+> #### ⚖️ Version comparison:
+>
+> | Metric | Standard version | UPX-compressed version | Difference |
+> |---|---|---|---|
+> | **Size on disk / Flash** | ~6.0 – 6.7 MB | **~1.7 – 2.0 MB** | **~70–75% Flash savings** |
+> | **RAM usage (RSS)** | **~10 – 14 MB** | ~16 – 22 MB | **Overhead: +5–7 MB RAM** |
+> | **Cold start time** | ~5 ms | ~30–60 ms | +30–50 ms decompressor time |
+
 ### Supported routers
 
 | Chip / Platform | Architecture | Example devices |

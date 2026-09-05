@@ -48,6 +48,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install UPX
+        run: sudo apt-get update && sudo apt-get install -y upx
+
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
@@ -56,17 +59,28 @@ jobs:
           GOMIPS: ${{ matrix.gomips }}
           CGO_ENABLED: 0
         run: |
+          mkdir -p bin
+          BIN="sota-headless-${{ matrix.suffix }}"
           go build \
+            -tags nethttpomithttp2 \
             -ldflags="-s -w -X sota-headless/internal/config.AppVersion=${{ github.ref_name }}" \
             -trimpath \
-            -o sota-headless-${{ matrix.suffix }} \
+            -o "bin/${BIN}" \
             ./cmd/sota-headless
+
+          # Create UPX compressed variant
+          case "${BIN}" in
+            *.exe) UPX_BIN="${BIN%.exe}-upx.exe" ;;
+            *)     UPX_BIN="${BIN}-upx" ;;
+          esac
+          cp "bin/${BIN}" "bin/${UPX_BIN}"
+          upx --best --lzma "bin/${UPX_BIN}" || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: sota-headless-${{ matrix.suffix }}
-          path: sota-headless-${{ matrix.suffix }}
+          path: bin/*
 
   release:
     name: Create GitHub Release
@@ -90,15 +104,16 @@ jobs:
           make_latest: false
           body: |
             > **Experimental Pre-release (v1.1.0)**
-            > Universal Linux installer with systemd support alongside OpenWrt procd.
+            > Universal Linux installer with systemd support alongside OpenWrt procd, plus Windows service support.
+            > Includes both standard and UPX-compressed variants for resource-constrained routers.
 
             ### Supported architectures
-            | File | Target |
-            |------|--------|
-            | `sota-headless-linux-arm64` | MediaTek Filogic, RPi 4/5, Rockchip |
-            | `sota-headless-linux-arm` | MT7621 (ARMv7), older routers |
-            | `sota-headless-linux-amd64` | x86/x64 routers |
-            | `sota-headless-linux-mips` | Atheros AR9xxx (big-endian) |
-            | `sota-headless-linux-mipsle` | MT7620/MT7628 (little-endian) |
-            | `sota-headless-windows-amd64.exe` | Windows x86_64 / x64 |
-            | `sota-headless-windows-arm64.exe` | Windows ARM64 |
+            | File (standard) | File (UPX-compressed) | Target |
+            |-----------------|-----------------------|--------|
+            | `sota-headless-linux-arm64` | `sota-headless-linux-arm64-upx` | MediaTek Filogic, RPi 4/5, Rockchip |
+            | `sota-headless-linux-arm` | `sota-headless-linux-arm-upx` | MT7621 (ARMv7), older routers |
+            | `sota-headless-linux-amd64` | `sota-headless-linux-amd64-upx` | x86/x64 routers |
+            | `sota-headless-linux-mips` | `sota-headless-linux-mips-upx` | Atheros AR9xxx (big-endian) |
+            | `sota-headless-linux-mipsle` | `sota-headless-linux-mipsle-upx` | MT7620/MT7628 (little-endian) |
+            | `sota-headless-windows-amd64.exe` | `sota-headless-windows-amd64-upx.exe` | Windows x86_64 / x64 |
+            | `sota-headless-windows-arm64.exe` | `sota-headless-windows-arm64-upx.exe` | Windows ARM64 |
