@@ -103,10 +103,6 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           make_latest: ${{ !contains(github.ref_name, '-') }}
           body: |
-            > **Release ${{ github.ref_name }}**
-            > Universal Linux installer with systemd support alongside OpenWrt procd, plus Windows service support.
-            > Includes both standard and UPX-compressed variants for resource-constrained routers.
-
             ### Supported architectures
             | File (standard) | File (UPX-compressed) | Target |
             |-----------------|-----------------------|--------|
