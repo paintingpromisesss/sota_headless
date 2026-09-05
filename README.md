@@ -2,7 +2,7 @@
 
 # sota-headless
 
-**Сервис генерации подписок Sota Connect для роутеров OpenWrt**
+**Сервис генерации подписок Sota Connect**
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat&logo=go&logoColor=white)](https://go.dev)
 [![Release](https://img.shields.io/github/v/release/paintingpromisesss/sota_headless?style=flat&color=yellow)](https://github.com/paintingpromisesss/sota_headless/releases/latest)
@@ -12,7 +12,7 @@
 [English](README_EN.md) • **Русский**
 
 Sota Connect закрывает свои подписки внутри проприетарного приложения.  
-Этот модуль авторизуется в API сервиса и отдаёт узлы в виде стандартной подписки — прямо с вашего роутера.
+Этот модуль авторизуется в API сервиса и отдаёт узлы в виде стандартной подписки.
 
 </div>
 
@@ -23,9 +23,9 @@ Sota Connect закрывает свои подписки внутри проп�
 ```
 Ваше устройство (Happ / Mihomo / v2rayNG / Zashboard / ...)
         │
-        │  GET http://router:16698/sub/mihomo
+        │  GET http://<host>:16698/sub/mihomo
         ▼
-  sota-headless  (фоновый сервис на роутере)
+  sota-headless  (фоновый сервис)
         │
         │  X-Access-Key + X-HWID → Sota API
         ▼
@@ -54,12 +54,6 @@ curl -fsSL https://raw.githubusercontent.com/paintingpromisesss/sota_headless/ma
 ```sh
 wget -O /tmp/install.sh https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/install.sh && sh /tmp/install.sh
 ```
-
-Инсталлятор сделает всё автоматически:
-- определит платформу (Windows, Linux с `systemd` или OpenWrt с `procd`) и архитектуру процессора
-- запросит ваш ключ доступа (Access Key)
-- скачает бинарник и настроит системную службу (на Windows — нативную службу Windows и правило брандмауэра)
-- запустит фоновый сервис и выведет ссылки на подписки
 
 ### Легковесная версия (UPX) для роутеров с малым объёмом Flash (16–32 МБ)
 
@@ -106,12 +100,12 @@ $env:SOTA_UPX=1; irm https://raw.githubusercontent.com/paintingpromisesss/sota_h
 
 | Формат | URL | Где использовать |
 |--------|-----|------------------|
-| **Mihomo YAML** | `http://router-ip:16698/sub/mihomo` | Mihomo, Zashboard, Clash.Meta |
-| **Base64** | `http://router-ip:16698/sub/base64` | Happ, v2rayNG, Shadowrocket |
-| **Обычные ссылки vless://** | `http://router-ip:16698/sub/vless` | Ручной импорт |
-| **sing-box JSON** | `http://router-ip:16698/sub/singbox` | Массив outbounds для sing-box |
+| **Mihomo YAML** | `http://<host>:16698/sub/mihomo` | Mihomo, Zashboard, Clash.Meta |
+| **Base64** | `http://<host>:16698/sub/base64` | Happ, v2rayNG, Shadowrocket |
+| **Обычные ссылки vless://** | `http://<host>:16698/sub/vless` | Ручной импорт |
+| **sing-box JSON** | `http://<host>:16698/sub/singbox` | Массив outbounds для sing-box |
 
-> Замените `router-ip` на локальный IP-адрес вашего роутера (например, `192.168.0.1` или `192.168.1.1`).
+> `<host>` — IP-адрес устройства в локальной сети или `127.0.0.1`, если клиент запущен на той же машине.
 
 ---
 
