@@ -26,12 +26,12 @@
 #>
 
 param(
-    [string]$AccessKey = "",
-    [string]$Version = "latest",
+    [string]$AccessKey = $(if ($env:SOTA_ACCESS_KEY) { $env:SOTA_ACCESS_KEY } else { "" }),
+    [string]$Version = $(if ($env:SOTA_VERSION) { $env:SOTA_VERSION } else { "latest" }),
     [string]$InstallDir = "$env:ProgramFiles\sota-headless",
     [string]$Listen = "0.0.0.0:16698",
     [string]$Lang = "",
-    [switch]$Upx,
+    [switch]$Upx = $(if ($env:SOTA_UPX -eq "1" -or $env:SOTA_UPX -eq "true") { $true } else { $false }),
     [switch]$Uninstall
 )
 
