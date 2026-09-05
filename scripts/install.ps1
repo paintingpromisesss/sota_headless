@@ -468,17 +468,23 @@ if ($LangUI -eq "ru") {
     Write-Host ""
     Write-Host "  Mihomo / Clash / Zashboard" -ForegroundColor Yellow
     Write-Host "  http://${lanIp}:${listenPort}/sub/mihomo" -ForegroundColor DarkGray
+    Write-Host "    ↑ IP в локальной сети (может меняться при DHCP)" -ForegroundColor DarkGray
+    Write-Host "  http://127.0.0.1:${listenPort}/sub/mihomo" -ForegroundColor DarkGray
+    Write-Host "    ↑ localhost — только с этого устройства, всегда стабилен" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  Sing-box outbounds" -ForegroundColor Yellow
     Write-Host "  http://${lanIp}:${listenPort}/sub/singbox" -ForegroundColor DarkGray
+    Write-Host "  http://127.0.0.1:${listenPort}/sub/singbox" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  Base64 (v2rayN, Nekoray, v2rayNG)" -ForegroundColor Yellow
     Write-Host "  http://${lanIp}:${listenPort}/sub/base64" -ForegroundColor DarkGray
+    Write-Host "  http://127.0.0.1:${listenPort}/sub/base64" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  Прямые ссылки vless://" -ForegroundColor Yellow
     Write-Host "  http://${lanIp}:${listenPort}/sub/vless" -ForegroundColor DarkGray
+    Write-Host "  http://127.0.0.1:${listenPort}/sub/vless" -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "  Проверка: curl http://127.0.0.1:${listenPort}/health" -ForegroundColor Gray
+    Write-Host "  Проверка: curl.exe http://127.0.0.1:${listenPort}/health" -ForegroundColor Gray
     Write-Host "  Статус:   Get-Service sota-headless" -ForegroundColor Gray
     Write-Host "  Перезапуск: Restart-Service sota-headless" -ForegroundColor Gray
     Write-Host "  Остановка:  Stop-Service sota-headless" -ForegroundColor Gray
@@ -489,15 +495,21 @@ if ($LangUI -eq "ru") {
     Write-Host ""
     Write-Host "  Mihomo / Clash / Zashboard" -ForegroundColor Yellow
     Write-Host "  http://${lanIp}:${listenPort}/sub/mihomo" -ForegroundColor DarkGray
+    Write-Host "    ↑ LAN IP (may change on DHCP renewal)" -ForegroundColor DarkGray
+    Write-Host "  http://127.0.0.1:${listenPort}/sub/mihomo" -ForegroundColor DarkGray
+    Write-Host "    ↑ localhost — this device only, always stable" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  Sing-box outbounds" -ForegroundColor Yellow
     Write-Host "  http://${lanIp}:${listenPort}/sub/singbox" -ForegroundColor DarkGray
+    Write-Host "  http://127.0.0.1:${listenPort}/sub/singbox" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  Base64 (v2rayN, Nekoray, v2rayNG)" -ForegroundColor Yellow
     Write-Host "  http://${lanIp}:${listenPort}/sub/base64" -ForegroundColor DarkGray
+    Write-Host "  http://127.0.0.1:${listenPort}/sub/base64" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  Plain vless:// links" -ForegroundColor Yellow
     Write-Host "  http://${lanIp}:${listenPort}/sub/vless" -ForegroundColor DarkGray
+    Write-Host "  http://127.0.0.1:${listenPort}/sub/vless" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  Health:  curl http://127.0.0.1:${listenPort}/health" -ForegroundColor Gray
     Write-Host "  Status:  Get-Service sota-headless" -ForegroundColor Gray
