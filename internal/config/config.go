@@ -16,7 +16,7 @@ const (
 	DefaultUserAgent = "Sota Connect (v1.7.7/windows)"
 )
 
-var AppVersion = "1.1.0"
+var AppVersion = "1.2.0"
 
 var DefaultAPIBases = []string{
 	"https://meowconnect.com/api/v1",
