@@ -305,7 +305,7 @@ Write-Hdr $(if ($LangUI -eq "ru") { "Загрузка файлов" } else { "Do
 
 # Check for local binary in build directory or script parent directory
 $localBin = ""
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } elseif ($MyInvocation.MyCommand -and $MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { "" }
 if ($scriptDir) {
     $candidates = @(
         (Join-Path $scriptDir "..\sota-headless.exe"),

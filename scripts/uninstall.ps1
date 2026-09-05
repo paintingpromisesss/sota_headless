@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     sota-headless uninstaller for Windows.
@@ -14,7 +14,7 @@ param(
     [string]$Lang = ""
 )
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } elseif ($MyInvocation.MyCommand -and $MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { "." }
 $installScript = Join-Path $scriptDir "install.ps1"
 
 if (Test-Path $installScript) {
