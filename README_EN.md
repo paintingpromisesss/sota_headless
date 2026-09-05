@@ -32,7 +32,7 @@ Your device (Happ / Mihomo / v2rayNG / Zashboard / ...)
    meowconnect.com  →  VLESS + Reality nodes
 ```
 
-Nodes are cached for 30 minutes. Zero external dependencies, no built-in sing-box, ~8 MB binary.
+Nodes are cached for 30 minutes. Zero external dependencies, no built-in sing-box, ~7 MB binary.
 
 ---
 

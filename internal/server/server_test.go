@@ -29,15 +29,14 @@ func TestServerHealthAndRequestLogging(t *testing.T) {
 	}
 
 	srv := Server{Controller: ctrl}
-	app := srv.app()
+	handler := srv.Handler()
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	logOutput := logBuf.String()
@@ -69,15 +68,14 @@ func TestServerNotFoundLogging(t *testing.T) {
 	}
 
 	srv := Server{Controller: ctrl}
-	app := srv.app()
+	handler := srv.Handler()
 
 	req := httptest.NewRequest(http.MethodGet, "/non-existent", nil)
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
 	}
 
 	logOutput := logBuf.String()

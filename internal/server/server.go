@@ -3,14 +3,13 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"strings"
 	"time"
-
-	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/recover"
 
 	"sota-headless/internal/config"
 	"sota-headless/internal/controller"
@@ -27,63 +26,71 @@ func ListenAndServe(ctx context.Context, c *controller.Controller, listen string
 		return err
 	}
 	addr := net.JoinHostPort(host, port)
-	app := Server{Controller: c}.app()
+	srv := Server{Controller: c}
+
+	httpServer := &http.Server{
+		Addr:              addr,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 
 	go func() {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
 		slog.Info("stopping HTTP server...")
-		if err := app.ShutdownWithContext(shutdownCtx); err != nil {
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			slog.Error("error shutting down HTTP server", "error", err)
 		} else {
 			slog.Info("HTTP server stopped gracefully")
 		}
 	}()
+
 	slog.Info("HTTP server listening", "service", config.AppName, "version", config.AppVersion, "address", "http://"+addr)
 	slog.Info("available endpoints",
 		"info", "/health, /status, /profile, /locations, /device",
 		"sub", "/sub, /sub/mihomo, /sub/vless, /sub/base64, /sub/singbox",
 		"ops", "POST /sub/refresh",
 	)
-	if err := app.Listen(addr, fiber.ListenConfig{DisableStartupMessage: true}); err != nil {
+
+	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("server error: %w", err)
 	}
 	return nil
 }
 
-func (s Server) app() *fiber.App {
-	app := fiber.New(fiber.Config{
-		ReadTimeout: 30 * time.Second,
-		JSONEncoder: controller.MarshalJSON,
-	})
-	app.Use(recover.New())
-	app.Use(requestLogger())
+func (s Server) Handler() http.Handler {
+	mux := http.NewServeMux()
 
 	// Info endpoints
-	app.Get("/", s.health)
-	app.Get("/health", s.health)
-	app.Get("/status", s.status)
-	app.Get("/profile", s.profile)
-	app.Get("/locations", s.locations)
-	app.Get("/device", s.device)
+	mux.HandleFunc("GET /{$}", s.health)
+	mux.HandleFunc("GET /health", s.health)
+	mux.HandleFunc("GET /status", s.status)
+	mux.HandleFunc("GET /profile", s.profile)
+	mux.HandleFunc("GET /locations", s.locations)
+	mux.HandleFunc("GET /device", s.device)
 
 	// Subscription endpoints
-	app.Get("/sub", s.subMihomo)          // default: Mihomo YAML
-	app.Get("/sub/mihomo", s.subMihomo)   // Mihomo / Clash.Meta proxy-provider YAML
-	app.Get("/sub/vless", s.subVless)     // plain vless:// links (newline separated)
-	app.Get("/sub/base64", s.subBase64)   // base64-encoded vless:// links (for generic clients)
-	app.Get("/sub/singbox", s.subSingbox) // sing-box outbounds JSON
+	mux.HandleFunc("GET /sub", s.subMihomo)
+	mux.HandleFunc("GET /sub/mihomo", s.subMihomo)
+	mux.HandleFunc("GET /sub/vless", s.subVless)
+	mux.HandleFunc("GET /sub/base64", s.subBase64)
+	mux.HandleFunc("GET /sub/singbox", s.subSingbox)
 
-	// Force cache refresh
-	app.Post("/sub/refresh", s.subRefresh)
+	// Operations
+	mux.HandleFunc("POST /sub/refresh", s.subRefresh)
 
-	app.Use(s.notFound)
-	return app
+	// Fallback for unmatched routes
+	mux.HandleFunc("/", s.notFound)
+
+	return withLoggingAndRecovery(mux)
 }
 
-func (s Server) health(c fiber.Ctx) error {
-	return writeJSON(c, fiber.StatusOK, map[string]any{
+func (s Server) health(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":      true,
 		"service": config.AppName,
 		"version": config.AppVersion,
@@ -91,163 +98,127 @@ func (s Server) health(c fiber.Ctx) error {
 	})
 }
 
-func (s Server) status(c fiber.Ctx) error {
-	return writeJSON(c, fiber.StatusOK, s.Controller.Status())
+func (s Server) status(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.Controller.Status())
 }
 
-func (s Server) profile(c fiber.Ctx) error {
-	result, err := s.Controller.Profile(requestContext(c))
+func (s Server) profile(w http.ResponseWriter, r *http.Request) {
+	result, err := s.Controller.Profile(r.Context())
 	if err != nil {
-		return writeError(c, err)
+		writeError(w, r, err)
+		return
 	}
-	return writeJSON(c, fiber.StatusOK, result)
+	writeJSON(w, http.StatusOK, result)
 }
 
-func (s Server) locations(c fiber.Ctx) error {
-	result, err := s.Controller.Locations(requestContext(c))
+func (s Server) locations(w http.ResponseWriter, r *http.Request) {
+	result, err := s.Controller.Locations(r.Context())
 	if err != nil {
-		return writeError(c, err)
+		writeError(w, r, err)
+		return
 	}
-	return writeJSON(c, fiber.StatusOK, result)
+	writeJSON(w, http.StatusOK, result)
 }
 
-func (s Server) device(c fiber.Ctx) error {
-	return writeJSON(c, fiber.StatusOK, controller.Redact(map[string]any{
+func (s Server) device(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, controller.Redact(map[string]any{
 		"x_hwid":        s.Controller.Device.HWID,
 		"x_device_name": s.Controller.Device.DeviceName,
 	}))
 }
 
-func (s Server) subMihomo(c fiber.Ctx) error {
-	nodes, err := s.Controller.Nodes(requestContext(c))
+func (s Server) subMihomo(w http.ResponseWriter, r *http.Request) {
+	nodes, err := s.Controller.Nodes(r.Context())
 	if err != nil {
-		return writeError(c, err)
+		writeError(w, r, err)
+		return
 	}
 	yaml := provider.ToMihomoYAML(nodes)
-	c.Set(fiber.HeaderContentType, "text/yaml; charset=utf-8")
-	c.Set("Profile-Update-Interval", "24")
-	c.Set("Subscription-Userinfo", "")
-	return c.Status(fiber.StatusOK).Send(yaml)
+	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+	w.Header().Set("Profile-Update-Interval", "24")
+	w.Header().Set("Subscription-Userinfo", "")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(yaml)
 }
 
-func (s Server) subVless(c fiber.Ctx) error {
-	nodes, err := s.Controller.Nodes(requestContext(c))
+func (s Server) subVless(w http.ResponseWriter, r *http.Request) {
+	nodes, err := s.Controller.Nodes(r.Context())
 	if err != nil {
-		return writeError(c, err)
+		writeError(w, r, err)
+		return
 	}
 	lines := provider.ToVlessLines(nodes)
-	c.Set(fiber.HeaderContentType, "text/plain; charset=utf-8")
-	return c.Status(fiber.StatusOK).SendString(lines)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(lines))
 }
 
-func (s Server) subBase64(c fiber.Ctx) error {
-	nodes, err := s.Controller.Nodes(requestContext(c))
+func (s Server) subBase64(w http.ResponseWriter, r *http.Request) {
+	nodes, err := s.Controller.Nodes(r.Context())
 	if err != nil {
-		return writeError(c, err)
+		writeError(w, r, err)
+		return
 	}
 	b64 := provider.ToBase64(nodes)
-	c.Set(fiber.HeaderContentType, "text/plain; charset=utf-8")
-	return c.Status(fiber.StatusOK).SendString(b64)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(b64))
 }
 
-func (s Server) subSingbox(c fiber.Ctx) error {
-	nodes, err := s.Controller.Nodes(requestContext(c))
+func (s Server) subSingbox(w http.ResponseWriter, r *http.Request) {
+	nodes, err := s.Controller.Nodes(r.Context())
 	if err != nil {
-		return writeError(c, err)
+		writeError(w, r, err)
+		return
 	}
 	data, err := provider.ToSingboxJSON(nodes)
 	if err != nil {
-		return writeError(c, err)
+		writeError(w, r, err)
+		return
 	}
-	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-	return c.Status(fiber.StatusOK).Send(data)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
-func (s Server) subRefresh(c fiber.Ctx) error {
-	slog.Info("manual cache refresh requested", "ip", c.IP())
+func (s Server) subRefresh(w http.ResponseWriter, r *http.Request) {
+	slog.Info("manual cache refresh requested", "ip", clientIP(r))
 	s.Controller.InvalidateCache()
-	nodes, err := s.Controller.Nodes(requestContext(c))
+	nodes, err := s.Controller.Nodes(r.Context())
 	if err != nil {
 		slog.Error("manual cache refresh failed", "error", err)
-		return writeError(c, err)
+		writeError(w, r, err)
+		return
 	}
 	slog.Info("manual cache refresh completed", "nodes_count", len(nodes))
-	return writeJSON(c, fiber.StatusOK, map[string]any{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":          true,
 		"nodes_count": len(nodes),
 		"refreshed":   true,
 	})
 }
 
-func (s Server) notFound(c fiber.Ctx) error {
-	known := []string{
-		"", "/", "/health", "/status", "/profile", "/locations", "/device",
-		"/sub", "/sub/mihomo", "/sub/vless", "/sub/base64", "/sub/singbox", "/sub/refresh",
-	}
-	path := strings.TrimRight(c.Path(), "/")
-	for _, k := range known {
-		if path == k {
-			return writeJSON(c, fiber.StatusMethodNotAllowed, map[string]any{"error": "method not allowed"})
-		}
-	}
-	return writeJSON(c, fiber.StatusNotFound, map[string]any{"error": "not found"})
+func (s Server) notFound(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
 }
 
-func requestContext(c fiber.Ctx) context.Context {
-	if ctx := c.Context(); ctx != nil {
-		return ctx
-	}
-	return context.Background()
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	slog.Error("endpoint returned error", "path", r.URL.Path, "error", err)
+	writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 }
 
-func writeError(c fiber.Ctx, err error) error {
-	slog.Error("endpoint returned error", "path", c.Path(), "error", err)
-	return writeJSON(c, fiber.StatusInternalServerError, map[string]any{"error": err.Error()})
-}
-
-func requestLogger() fiber.Handler {
-	return func(c fiber.Ctx) error {
-		start := time.Now()
-		err := c.Next()
-		latency := time.Since(start)
-		status := c.Response().StatusCode()
-		method := c.Method()
-		path := c.Path()
-		ip := c.IP()
-
-		attrs := []any{
-			"status", status,
-			"method", method,
-			"path", path,
-			"ip", ip,
-			"latency", latency.Round(time.Microsecond).String(),
-		}
-
-		if err != nil {
-			attrs = append(attrs, "error", err)
-			slog.Error("http request error", attrs...)
-		} else if status >= 500 {
-			slog.Error("http request", attrs...)
-		} else if status >= 400 {
-			slog.Warn("http request", attrs...)
-		} else {
-			slog.Info("http request", attrs...)
-		}
-		return err
-	}
-}
-
-func writeJSON(c fiber.Ctx, status int, value any) error {
+func writeJSON(w http.ResponseWriter, status int, value any) {
 	data, err := controller.MarshalJSON(value)
 	if err != nil {
 		data, err = json.Marshal(map[string]any{"error": err.Error()})
 		if err != nil {
-			_ = c.Status(fiber.StatusInternalServerError).SendString(`{"error":"failed to marshal response"}`)
-			return nil
+			http.Error(w, `{"error":"failed to marshal response"}`, http.StatusInternalServerError)
+			return
 		}
 	}
-	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-	return c.Status(status).Send(append(data, '\n'))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(append(data, '\n'))
 }
 
 func parseListen(listen string) (string, string, error) {
@@ -262,4 +233,83 @@ func parseListen(listen string) (string, string, error) {
 		return "", "", fmt.Errorf("invalid listen address: %w", err)
 	}
 	return host, port, nil
+}
+
+type statusResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	written    bool
+}
+
+func (rw *statusResponseWriter) WriteHeader(code int) {
+	if !rw.written {
+		rw.statusCode = code
+		rw.written = true
+		rw.ResponseWriter.WriteHeader(code)
+	}
+}
+
+func (rw *statusResponseWriter) Write(b []byte) (int, error) {
+	if !rw.written {
+		rw.statusCode = http.StatusOK
+		rw.written = true
+	}
+	return rw.ResponseWriter.Write(b)
+}
+
+func withLoggingAndRecovery(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rw := &statusResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+		defer func() {
+			if rec := recover(); rec != nil {
+				rw.statusCode = http.StatusInternalServerError
+				http.Error(rw, `{"error":"internal server error"}`, http.StatusInternalServerError)
+				slog.Error("panic recovered in http handler", "error", fmt.Sprint(rec))
+			}
+			latency := time.Since(start)
+			ip := clientIP(r)
+			attrs := []any{
+				"status", rw.statusCode,
+				"method", r.Method,
+				"path", r.URL.Path,
+				"ip", ip,
+				"latency", latency.Round(time.Microsecond).String(),
+			}
+
+			if rw.statusCode >= 500 {
+				slog.Error("http request", attrs...)
+			} else if rw.statusCode >= 400 {
+				slog.Warn("http request", attrs...)
+			} else {
+				slog.Info("http request", attrs...)
+			}
+		}()
+
+		next.ServeHTTP(rw, r)
+	})
+}
+
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			ip := strings.TrimSpace(parts[0])
+			if ip != "" {
+				return ip
+			}
+		}
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		ip := strings.TrimSpace(xri)
+		if ip != "" {
+			return ip
+		}
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
