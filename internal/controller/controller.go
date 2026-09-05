@@ -131,7 +131,6 @@ func (c *Controller) Status() map[string]any {
 	c.mu.RUnlock()
 
 	return map[string]any{
-		"version":     config.AppVersion,
 		"cache_nodes": cacheCount,
 		"cache_age":   cacheAge,
 		"cache_ttl":   c.cacheTTL.String(),
