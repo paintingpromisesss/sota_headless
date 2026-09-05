@@ -482,7 +482,7 @@ if ($LangUI -eq "ru") {
     Write-Host "  Статус:   Get-Service sota-headless" -ForegroundColor Gray
     Write-Host "  Перезапуск: Restart-Service sota-headless" -ForegroundColor Gray
     Write-Host "  Остановка:  Stop-Service sota-headless" -ForegroundColor Gray
-    Write-Host '  Удаление: powershell -ExecutionPolicy Bypass -File scripts\uninstall.ps1' -ForegroundColor Gray
+    Write-Host "  Удаление: irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/uninstall.ps1 | iex" -ForegroundColor Gray
     Write-Host ""
 } else {
     Write-Host "  Subscription URLs:" -ForegroundColor Gray
@@ -503,6 +503,6 @@ if ($LangUI -eq "ru") {
     Write-Host "  Status:  Get-Service sota-headless" -ForegroundColor Gray
     Write-Host "  Restart: Restart-Service sota-headless" -ForegroundColor Gray
     Write-Host "  Stop:    Stop-Service sota-headless" -ForegroundColor Gray
-    Write-Host '  Uninstall: powershell -ExecutionPolicy Bypass -File scripts\uninstall.ps1' -ForegroundColor Gray
+    Write-Host "  Uninstall: irm https://raw.githubusercontent.com/paintingpromisesss/sota_headless/main/scripts/uninstall.ps1 | iex" -ForegroundColor Gray
     Write-Host ""
 }
